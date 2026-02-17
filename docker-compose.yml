@@ -24,22 +24,6 @@ services:
 
       - nexus-network
 
-    # Se tiver GPU NVIDIA, descomente abaixo:
-
-    # deploy:
-
-    #   resources:
-
-    #     reservations:
-
-    #       devices:
-
-    #         - driver: nvidia
-
-    #           count: 1
-
-    #           capabilities: [gpu]
-
   # 📚 A MEMÓRIA: Qdrant
 
   qdrant:
@@ -90,7 +74,7 @@ services:
 
       - QDRANT_PORT=6333
 
-      - GITHUB_TOKEN=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
+      - GITHUB_TOKEN=
 
       - WEBUI_AUTH=True
 
