@@ -1,147 +1,88 @@
 version: '3.8'
 
 services:
-
   # 🧠 O CÉREBRO: Ollama
-
   ollama:
-
     image: ollama/ollama:latest
-
     container_name: ollama
-
     ports:
-
-      - "11435:11435"
-
+      - "11434:11434"
     volumes:
-
       - ollama_data:/root/.ollama
-
     restart: unless-stopped
-
     networks:
-
       - nexus-network
+    # Se tiver GPU NVIDIA, descomente abaixo:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
 
   # 📚 A MEMÓRIA: Qdrant
-
   qdrant:
-
     image: qdrant/qdrant
-
     container_name: qdrant
-
     ports:
-
       - "6333:6333"
-
     volumes:
-
       - qdrant_data:/qdrant/storage
-
     restart: unless-stopped
-
     networks:
-
       - nexus-network
 
   # 🖥️ A INTERFACE: Open WebUI (Com RAG configurado)
-
   open-webui:
-
     image: ghcr.io/open-webui/open-webui:main
-
     container_name: open-webui
-
     ports:
-
       - "3000:8080"
-
     environment:
-
       - OLLAMA_BASE_URL=http://ollama:11434
-
+      # Configuração de RAG / Memória
       - RAG_EMBEDDING_ENGINE=ollama
-
       - RAG_EMBEDDING_MODEL=nomic-embed-text:latest
-
       - VECTOR_DB=qdrant
-
       - QDRANT_URI=http://qdrant:6333
-
       - QDRANT_HOST=qdrant
-
       - QDRANT_PORT=6333
-
-      - GITHUB_TOKEN=
-
       - WEBUI_AUTH=True
-
       - ENABLE_RAG_WEB_SEARCH=True
-
       - ENABLE_COMMAND_INTERPRETER=True
-
     volumes:
-
       - open-webui_data:/app/backend/data
-
     depends_on:
-
       - ollama
-
       - qdrant
-
     networks:
-
       - nexus-network
 
   # ⚙️ O ORQUESTRADOR: n8n
-
   n8n:
-
     image: docker.n8n.io/n8nio/n8n
-
     container_name: n8n
-
     ports:
-
       - "5678:5678"
-
     environment:
-
       - N8N_SECURE_COOKIE=false
-
       - GENERIC_TIMEZONE=America/Sao_Paulo
-
       - TZ=America/Sao_Paulo
-
     volumes:
-
       - n8n_data:/home/node/.n8n
-
     depends_on:
-
       - qdrant
-
       - ollama
-
     networks:
-
       - nexus-network
 
 volumes:
-
   ollama_data:
-
   open-webui_data:
-
   n8n_data:
-
   qdrant_data:
 
 networks:
-
   nexus-network:
-
     driver: bridge
