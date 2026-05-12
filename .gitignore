@@ -1,29 +1,7 @@
-# Logs
-logs
-*.log
-npm-debug.log*
+node_modules
+package.json
+package-lock.json
+bun.lock
+.gitignore
 
-# Runtime data
-pids
-*.pid
-*.seed
-*.pid.lock
-
-# Docker volumes & data (CRÍTICO)
-ollama_data/
-n8n_data/
-open-webui_data/
-postgres_data/
-
-# Environment variables (CRÍTICO)
-.env
 .env.local
-.env.production
-
-# OS junk
-.DS_Store
-Thumbs.db
-
-# IDEs
-.vscode/
-.idea/
