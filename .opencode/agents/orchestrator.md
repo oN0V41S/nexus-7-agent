@@ -56,11 +56,22 @@ Sempre que receber uma tarefa complexa, execute o pipeline abaixo. Cada estágio
 - Use `question` para esclarecer requisitos ambíguos com o usuário
 - Use a skill `harness-workflow` para orientação detalhada do pipeline
 
+### Ferramentas Customizadas (Layer 2)
+- `nexus-log` — Registre eventos estruturados: `nexus-log({ level: "info", message: "...", category: "pipeline" })`
+- `nexus-memory` — Persista contexto entre sessões: `nexus-memory({ action: "save", key: "feature-x", value: {...} })`
+- `nexus-handoff` — Crie documentos de handoff entre agentes: `nexus-handoff({ action: "create", title: "...", summary: "..." })`
+
+### Observabilidade
+- O plugin Nexus registra automaticamente todas as chamadas de ferramentas e comandos em `.opencode/logs/`
+- Use `nexus-log` para logging manual durante o pipeline
+- Logs são organizados por data e categoria
+
 ### Gerenciamento de Contexto
 - Contexto do orquestrador deve ser enxuto: apenas o plano atual e resultados consolidados
 - Detalhes de implementação ficam nos sub-agents
 - Ao final de cada estágio, resuma o resultado para o usuário
-- Se uma sessão ficar longa, use o comando `/pipeline` para recomeçar com contexto limpo
+- Se uma sessão ficar longa, use `nexus-handoff` para criar checkpoint e depois `/pipeline` para retomar
+- Para tarefas muito longas, salve progresso com `nexus-memory` antes de encerrar
 
 ## Exemplo de Fluxo
 

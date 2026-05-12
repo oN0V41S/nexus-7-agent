@@ -6,7 +6,7 @@ Ecossistema de Agentes de IA 100% local para orquestração de tarefas, automaç
 
 ## Harness de Orquestração
 
-O Nexus usa um **harness de 5 estágios** (PLAN → ANALYZE → BUILD → REVIEW → DOCUMENT) implementado via OpenCode:
+O Nexus usa um **harness de 5 estágios** (PLAN → ANALYZE → BUILD → REVIEW → DOCUMENT) implementado via OpenCode, com **2 camadas de infraestrutura**:
 
 | Componente | Localização | Função |
 |---|---|---|
@@ -14,6 +14,8 @@ O Nexus usa um **harness de 5 estágios** (PLAN → ANALYZE → BUILD → REVIEW
 | **Harness Workflow** | `.opencode/skills/harness-workflow/SKILL.md` | Skill que define os 5 estágios |
 | **Pipeline Command** | `.opencode/commands/pipeline.md` | Atalho `/pipeline` para iniciar o ciclo |
 | **Sub-agents** | `.opencode/agents/*.md` | Agentes especializados delegáveis |
+| **Custom Tools** | `.opencode/tools/*.ts` | Ferramentas customizadas (log, memória, handoff) |
+| **Plugin** | `.opencode/plugins/nexus-plugin.ts` | Observabilidade e hooks de ciclo de vida |
 
 ## Agentes do Ecossistema
 
@@ -46,9 +48,30 @@ O Nexus usa um **harness de 5 estágios** (PLAN → ANALYZE → BUILD → REVIEW
 | `/create-component` | Cria componentes UI |
 | `/commit-&-docs` | Commit + atualização de documentação |
 
+## Custom Tools (Layer 2)
+
+| Tool | Descrição |
+|---|---|
+| `nexus-log` | Log estruturado para `.opencode/logs/`. Níveis: info, warn, error, debug, trace |
+| `nexus-memory` | Persistência de contexto entre sessões em `.opencode/memory/`. Ações: save, load, list, delete |
+| `nexus-handoff` | Handoff entre agentes/sessões em `.opencode/memory/handoffs/`. Ações: create, apply, list |
+
+## Diretórios de Dados
+
+| Diretório | Propósito |
+|---|---|
+| `.opencode/logs/` | Logs estruturados do harness (rotacionados por data e categoria) |
+| `.opencode/memory/` | Dados persistentes entre sessões (JSON) |
+| `.opencode/memory/handoffs/` | Documentos de handoff para retomada de contexto |
+| `.opencode/tools/` | Ferramentas customizadas do ecossistema |
+| `.opencode/plugins/` | Plugins de hook do OpenCode |
+
 ## Convenções
 
 - **Linguagem:** Português para comunicação com o usuário
 - **Commits:** Descritivos e atômicos, usando `/commit-&-docs`
 - **Pipeline:** Sempre iniciar com `/pipeline` para tarefas complexas
 - **Sub-agents:** Usar `task("descrição", "@agent-name")` para delegação
+- **Logs:** Usar `nexus-log` para registrar eventos importantes
+- **Memória:** Usar `nexus-memory` para salvar/recuperar contexto entre sessões
+- **Handoff:** Usar `nexus-handoff` antes de pausar tarefas longas

@@ -69,6 +69,10 @@
     "AGENTS.md"
   ],
 
+  "plugin": [
+    ".opencode/plugins/nexus-plugin.ts"
+  ],
+
   "permission": {
     "glob": "allow",
     "grep": "allow",
@@ -79,7 +83,10 @@
     "webfetch": "allow",
     "websearch": "allow",
     "question": "allow",
-    "task": "allow"
+    "task": "allow",
+    "nexus-log": "allow",
+    "nexus-memory": "allow",
+    "nexus-handoff": "allow"
   },
 
   "mcp": {
