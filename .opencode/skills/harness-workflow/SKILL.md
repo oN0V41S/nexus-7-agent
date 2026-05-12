@@ -1,0 +1,130 @@
+---
+name: harness-workflow
+description: Define o pipeline de 5 estágios (PLAN → ANALYZE → BUILD → REVIEW → DOCUMENT) para orquestração de tarefas no ecossistema Nexus 7 Agent.
+---
+
+# Harness Workflow Skill
+
+Define o pipeline de execução do ecossistema Nexus. Use esta skill sempre que o orquestrador precisar decompor uma tarefa complexa em estágios gerenciáveis com delegação a sub-agents.
+
+## Quando Usar Esta Skill
+
+- Tarefas que envolvem múltiplas áreas (código + segurança + testes + docs)
+- Features novas que precisam passar por todo o ciclo de desenvolvimento
+- Mudanças que exigem auditoria de segurança e validação de qualidade
+- Qualquer tarefa que o usuário peça para executar o pipeline completo
+
+## Quando NÃO Usar Esta Skill
+
+- Perguntas simples ou consultas que não exigem implementação
+- Correções rápidas de bugs (use o fluxo direto)
+- Tarefas puramente de investigação/leitura de código
+
+## Pipeline de 5 Estágios
+
+### Estágio 1: PLAN
+
+**Objetivo:** Transformar o requisito em um plano acionável.
+
+**Atividades:**
+1. Receba a descrição da tarefa do usuário
+2. Use `question` para esclarecer ambiguidades:
+   - Qual é o escopo exato?
+   - Quais são os critérios de aceitação?
+   - Há preferências de implementação?
+3. Decomponha em tarefas atômicas mapeadas aos estágios do pipeline
+4. Identifique sub-agents necessários para cada estágio
+5. Apresente o plano ao usuário e aguarde aprovação
+
+**Entregável:** Plano estruturado aprovado pelo usuário.
+
+### Estágio 2: ANALYZE
+
+**Objetivo:** Analisar o código existente e identificar riscos antes de implementar.
+
+**Atividades:**
+1. Use `glob` e `grep` para mapear arquivos existentes relacionados
+2. Use `read` para entender código existente que será modificado
+3. Se houver dados sensíveis: use `task` com `@security-secret-auditor`
+4. Se for mudança arquitetural: use skill `project-review`
+5. Documente descobertas relevantes
+
+**Sub-agents recomendados:**
+- `@security-secret-auditor` — auditoria de segurança
+- Skill `project-review` — revisão arquitetural
+
+**Entregável:** Relatório de análise com riscos identificados.
+
+### Estágio 3: BUILD
+
+**Objetivo:** Implementar as mudanças conforme o plano aprovado.
+
+**Atividades:**
+1. Siga o plano do Estágio 1
+2. Use `read`/`write`/`edit` para modificar arquivos
+3. Use `glob`/`grep` para localizar referências
+4. Execute builds intermediários (`bash`) para verificar
+5. Faça commits parciais como checkpoint
+
+**Ferramentas:** `read`, `write`, `edit`, `glob`, `grep`, `bash`
+
+**Entregável:** Código implementado com commits checkpoint.
+
+### Estágio 4: REVIEW
+
+**Objetivo:** Validar qualidade, segurança e funcionamento correto.
+
+**Atividades:**
+1. Use `bash` para executar linters: `npm run lint`, `npx tsc --noEmit`
+2. Use `task` com `@quality-assurance-analyst` para testes
+3. Verifique cobertura se aplicável
+4. Reporte falhas ao usuário e aguarde decisão
+5. Corrija problemas aprovados
+
+**Sub-agents recomendados:**
+- `@quality-assurance-analyst` — testes unitários, integração, cobertura
+
+**Entregável:** Relatório de qualidade com status dos checks.
+
+### Estágio 5: DOCUMENT
+
+**Objetivo:** Documentar as mudanças para manutenção futura.
+
+**Atividades:**
+1. Use `task` com `@docs-architect` para documentar:
+   - Novas APIs (Swagger/OpenAPI)
+   - Mudanças arquiteturais (diagramas Mermaid)
+   - Instruções de uso
+2. Atualize `AGENTS.md` se necessário (contexto do projeto)
+3. Execute `/commit-&-docs` para commit final com docs
+
+**Sub-agents recomendados:**
+- `@docs-architect` — documentação técnica
+
+**Entregável:** Documentação atualizada + commit final.
+
+## Ferramentas e Permissões
+
+- **Permitidas:** `read`, `write`, `edit`, `glob`, `grep`, `bash`, `question`, `task`, `webfetch`, `websearch`
+- **Restrições:** use `question` antes de `write` em arquivos críticos; sempre peça aprovação para mudanças destrutivas
+
+## Critérios de Qualidade
+
+- [ ] Plano aprovado pelo usuário antes de implementar
+- [ ] Análise de segurança executada para dados sensíveis
+- [ ] Linters e type checking sem erros
+- [ ] Testes passando (ou falhas documentadas e aprovadas)
+- [ ] Documentação atualizada
+- [ ] Commits descritivos e atômicos
+
+## Fluxo de Iteração
+
+Se em qualquer estágio for identificado um problema que exija volta ao estágio anterior:
+
+```
+DOCUMENT → REVIEW → BUILD → ANALYZE → PLAN
+          ↑        ↑         ↑          ↑
+          └────────┴─────────┴──────────┘
+```
+
+Exemplo: se nos testes (REVIEW) um problema arquitetural for descoberto, volte ao ANALYZE ou BUILD. Se o requisito mudar, volte ao PLAN.
