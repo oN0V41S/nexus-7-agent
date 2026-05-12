@@ -38,6 +38,7 @@ O Nexus usa um **harness de 5 estágios** (PLAN → ANALYZE → BUILD → REVIEW
 | `react-components` | Componentes React com shadcn/ui |
 | `commit-push` | Fluxo de commit, documentação e push |
 | `mem-search` | Consulta de memória persistente com progressive disclosure |
+| `agent-creator` | Meta-agente que cria outros agentes a partir de descrição natural |
 
 ## Comandos Customizados
 
@@ -52,6 +53,7 @@ O Nexus usa um **harness de 5 estágios** (PLAN → ANALYZE → BUILD → REVIEW
 | `/qa` | Testes e qualidade (delega ao @quality-assurance-analyst) |
 | `/docs` | Documentação técnica (delega ao @docs-architect) |
 | `/memory` | Consulta memória persistente do harness |
+| `/criar-agente` | Cria novo agente para o ecossistema Nexus (delega ao orchestrator) |
 | `/commit-&-docs` | Commit + atualização de documentação |
 
 ## Custom Tools (Layer 2)
