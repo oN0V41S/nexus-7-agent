@@ -1,0 +1,12 @@
+node_modules
+package.json
+package-lock.json
+bun.lock
+.gitignore
+
+# Auto-generated harness data (logs, memory observations, handoffs)
+logs/*
+!logs/.gitkeep
+
+memory/*
+!memory/.gitkeep
