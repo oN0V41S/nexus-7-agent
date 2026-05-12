@@ -66,12 +66,19 @@ Sempre que receber uma tarefa complexa, execute o pipeline abaixo. Cada estágio
 - Use `nexus-log` para logging manual durante o pipeline
 - Logs são organizados por data e categoria
 
+### Memória e Consulta
+- Use a skill `mem-search` para consultar observações de sessões anteriores
+- Progressive disclosure: primeiro `nexus-memory action=search` (índice), depois `action=load` (detalhes)
+- O plugin Nexus captura automaticamente observações de ferramentas (write, edit, bash, task, skill)
+- Handoffs são criados automaticamente durante compactação de sessão
+
 ### Gerenciamento de Contexto
 - Contexto do orquestrador deve ser enxuto: apenas o plano atual e resultados consolidados
 - Detalhes de implementação ficam nos sub-agents
 - Ao final de cada estágio, resuma o resultado para o usuário
 - Se uma sessão ficar longa, use `nexus-handoff` para criar checkpoint e depois `/pipeline` para retomar
 - Para tarefas muito longas, salve progresso com `nexus-memory` antes de encerrar
+- Para retomar trabalho anterior: `nexus-memory action=search query="<tema>" scope=observations`
 
 ## Exemplo de Fluxo
 

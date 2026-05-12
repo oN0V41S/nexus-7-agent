@@ -105,8 +105,22 @@ Define o pipeline de execução do ecossistema Nexus. Use esta skill sempre que 
 
 ## Ferramentas e Permissões
 
-- **Permitidas:** `read`, `write`, `edit`, `glob`, `grep`, `bash`, `question`, `task`, `webfetch`, `websearch`
+- **Permitidas:** `read`, `write`, `edit`, `glob`, `grep`, `bash`, `question`, `task`, `webfetch`, `websearch`, `nexus-log`, `nexus-memory`, `nexus-handoff`
 - **Restrições:** use `question` antes de `write` em arquivos críticos; sempre peça aprovação para mudanças destrutivas
+
+## Memória e Observabilidade
+
+### Auto-Observação
+O plugin Nexus registra automaticamente:
+- Chamadas de ferramentas write/edit/bash em `.opencode/memory/observations/`
+- Handoffs automáticos durante compactação de sessão
+- Logs estruturados em `.opencode/logs/`
+
+### Consulta de Memória
+Use a skill `mem-search` para consultar sessões anteriores:
+1. `nexus-memory({ action: "search", query: "termo", scope: "observations" })` — índice compacto
+2. `nexus-memory({ action: "load", key: "...", scope: "observations" })` — detalhes completos
+3. `nexus-handoff({ action: "apply", handoffId: "..." })` — retomar contexto
 
 ## Critérios de Qualidade
 
@@ -116,6 +130,7 @@ Define o pipeline de execução do ecossistema Nexus. Use esta skill sempre que 
 - [ ] Testes passando (ou falhas documentadas e aprovadas)
 - [ ] Documentação atualizada
 - [ ] Commits descritivos e atômicos
+- [ ] Memória consultada se a tarefa for continuação de trabalho anterior
 
 ## Fluxo de Iteração
 

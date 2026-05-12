@@ -24,8 +24,8 @@ export default tool({
   description: "Persiste e recupera contexto entre sessões do harness Nexus. Memória chave-valor em .opencode/memory/.",
   args: {
     action: tool.schema
-      .enum(["save", "load", "list", "delete"])
-      .describe("Ação: save (salvar), load (carregar), list (listar chaves), delete (remover)"),
+      .enum(["save", "load", "list", "delete", "search"])
+      .describe("Ação: save (salvar), load (carregar), list (listar chaves), delete (remover), search (buscar texto)"),
     key: tool.schema
       .string()
       .optional()
@@ -38,9 +38,17 @@ export default tool({
       .string()
       .default("session")
       .describe("Escopo: 'session' (vida curta), 'project' (vida longa), 'agent' (por agente)"),
+    query: tool.schema
+      .string()
+      .optional()
+      .describe("Termo de busca textual (usado em action=search)"),
+    limit: tool.schema
+      .number()
+      .default(10)
+      .describe("Limite de resultados (usado em search e list)"),
   },
   async execute(args, context) {
-    const { action, key, value, scope } = args;
+    const { action, key, value, scope, query, limit } = args;
     const memDir = ensureMemoryDir(context.worktree);
 
     switch (action) {
@@ -90,6 +98,46 @@ export default tool({
         });
       }
 
+      case "search": {
+        if (!query) throw new Error("query é obrigatório para action=search");
+
+        const files = fs.readdirSync(memDir).filter((f) => f.endsWith(".json"));
+        const lowerQuery = query.toLowerCase();
+        const results = files
+          .map((f) => {
+            try {
+              const content = JSON.parse(fs.readFileSync(path.join(memDir, f), "utf-8"));
+              const searchableText = JSON.stringify(content).toLowerCase();
+              const score = searchableText.includes(lowerQuery)
+                ? (searchableText.match(new RegExp(lowerQuery, "g")) || []).length
+                : 0;
+              return { file: f, score, entry: content };
+            } catch {
+              return null;
+            }
+          })
+          .filter((r): r is NonNullable<typeof r> => r !== null && r.score > 0)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, limit);
+
+        return JSON.stringify({
+          status: "searched",
+          query,
+          count: results.length,
+          results: results.map((r) => ({
+            key: r.entry.key,
+            scope: r.entry.scope,
+            savedAt: r.entry.savedAt,
+            agent: r.entry.agent,
+            summary:
+              typeof r.entry.value === "object" && r.entry.value !== null
+                ? JSON.stringify(r.entry.value).slice(0, 200)
+                : String(r.entry.value).slice(0, 200),
+            score: r.score,
+          })),
+        });
+      }
+
       case "list": {
         const files = fs.readdirSync(memDir).filter((f) => f.endsWith(".json"));
         const entries = files.map((f) => {
@@ -104,7 +152,8 @@ export default tool({
         return JSON.stringify({
           status: "listed",
           count: entries.length,
-          entries,
+          totalFiles: files.length,
+          entries: entries.slice(0, limit),
         });
       }
 

@@ -37,6 +37,7 @@ O Nexus usa um **harness de 5 estágios** (PLAN → ANALYZE → BUILD → REVIEW
 | `documentation-architect` | Documentação técnica |
 | `react-components` | Componentes React com shadcn/ui |
 | `commit-push` | Fluxo de commit, documentação e push |
+| `mem-search` | Consulta de memória persistente com progressive disclosure |
 
 ## Comandos Customizados
 
@@ -53,7 +54,7 @@ O Nexus usa um **harness de 5 estágios** (PLAN → ANALYZE → BUILD → REVIEW
 | Tool | Descrição |
 |---|---|
 | `nexus-log` | Log estruturado para `.opencode/logs/`. Níveis: info, warn, error, debug, trace |
-| `nexus-memory` | Persistência de contexto entre sessões em `.opencode/memory/`. Ações: save, load, list, delete |
+| `nexus-memory` | Persistência de contexto entre sessões em `.opencode/memory/`. Ações: save, load, list, delete, search |
 | `nexus-handoff` | Handoff entre agentes/sessões em `.opencode/memory/handoffs/`. Ações: create, apply, list |
 
 ## Diretórios de Dados
