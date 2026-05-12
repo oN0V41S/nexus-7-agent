@@ -47,6 +47,11 @@ O Nexus usa um **harness de 5 estágios** (PLAN → ANALYZE → BUILD → REVIEW
 | `/spec-gen` | Adapta prompt para Spec Driven Development |
 | `/review-doc` | Revisa documentação contra código |
 | `/create-component` | Cria componentes UI |
+| `/plan` | Planeja feature usando pipeline harness (delega ao orchestrator) |
+| `/security` | Auditoria de segurança (delega ao @security-secret-auditor) |
+| `/qa` | Testes e qualidade (delega ao @quality-assurance-analyst) |
+| `/docs` | Documentação técnica (delega ao @docs-architect) |
+| `/memory` | Consulta memória persistente do harness |
 | `/commit-&-docs` | Commit + atualização de documentação |
 
 ## Custom Tools (Layer 2)

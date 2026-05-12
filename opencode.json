@@ -7,7 +7,6 @@
     "orchestrator": {
       "description": "Orquestrador Nexus - gerencia o pipeline harness de 5 estágios",
       "mode": "primary",
-      "model": "anthropic/claude-sonnet-4-5",
       "temperature": 0.1,
       "maxSteps": 50,
       "tools": {
@@ -24,8 +23,8 @@
         "websearch": true
       },
       "permission": {
-        "edit": "ask",
-        "bash": "ask",
+        "edit": "allow",
+        "bash": "allow",
         "webfetch": "allow",
         "websearch": "allow"
       }
@@ -72,6 +71,37 @@
   "plugin": [
     ".opencode/plugins/nexus-plugin.ts"
   ],
+
+  "command": {
+    "plan": {
+      "description": "Planeja feature usando pipeline harness",
+      "template": "{file:.opencode/commands/plan.md}\n\n$ARGUMENTS",
+      "agent": "orchestrator",
+      "subtask": true
+    },
+    "security": {
+      "description": "Auditoria de segurança no código",
+      "template": "{file:.opencode/commands/security.md}\n\n$ARGUMENTS",
+      "agent": "security-secret-auditor",
+      "subtask": true
+    },
+    "qa": {
+      "description": "Testes e validação de qualidade",
+      "template": "{file:.opencode/commands/qa.md}\n\n$ARGUMENTS",
+      "agent": "quality-assurance-analyst",
+      "subtask": true
+    },
+    "docs": {
+      "description": "Documentação técnica",
+      "template": "{file:.opencode/commands/docs.md}\n\n$ARGUMENTS",
+      "agent": "docs-architect",
+      "subtask": true
+    },
+    "memory": {
+      "description": "Consulta memória persistente do harness",
+      "template": "{file:.opencode/commands/memory.md}\n\n$ARGUMENTS"
+    }
+  },
 
   "permission": {
     "glob": "allow",
