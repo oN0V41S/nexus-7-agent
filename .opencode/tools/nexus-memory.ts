@@ -1,6 +1,7 @@
 import { tool } from "@opencode-ai/plugin/tool";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { createDb, type SqliteDb } from "./sqlite-adapter";
 
 /**
  * Nexus Memory Tool v3 — SQLite + FTS5
@@ -18,27 +19,20 @@ const HANDOFF_DIR = ".opencode/memory/handoffs";
 // Database
 // ============================================================
 
-let db: any = null;
+let db: SqliteDb | null = null;
 let dbPath: string = "";
 
-function getDb(baseDir: string): any {
+function getDb(baseDir: string): SqliteDb {
   if (db) return db;
 
   const memDir = path.join(baseDir, MEMORY_DIR);
   if (!fs.existsSync(memDir)) fs.mkdirSync(memDir, { recursive: true });
 
   dbPath = path.join(memDir, DB_FILE);
-  // Dynamic import to avoid issues if not available
-  try {
-    const BetterSqlite3 = require("better-sqlite3");
-    db = new BetterSqlite3(dbPath);
-    db.pragma("journal_mode = WAL");
-    initSchema(db);
-    migrateJsonToSqlite(db, memDir);
-    return db;
-  } catch (e) {
-    throw new Error(`Failed to initialize SQLite: ${e}`);
-  }
+  db = createDb(dbPath);
+  initSchema(db as any);
+  migrateJsonToSqlite(db as any, memDir);
+  return db;
 }
 
 function initSchema(database: any): void {
