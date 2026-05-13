@@ -6,3 +6,7 @@ bun.lock
 
 .env.local
 .env
+
+# Implementation plans (ephemeral context for agent sessions)
+docs/superpowers/plans/*
+!docs/superpowers/plans/.gitkeep
