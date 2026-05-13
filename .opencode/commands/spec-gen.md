@@ -1,33 +1,63 @@
-ADAPTA qualquer prompt para o modelo Spec Driven Development.
-SE o prompt não possuir informações suficientes, use a ferramenta question para SOLICITAR mais requisitos ao usuário.
-Use o seguinte framework para estruturar o prompt adaptado:
+Gera um documento de spec formal (.spec.md) no diretório `docs/spec/` seguindo o formato Spec Driven Development do Nexus.
 
-## SPEC DRIVEN DEVELOPMENT PROMPT FRAMEWORK
+## Fluxo
 
-### 1. Visão Geral do Problema
-- Qual é o problema ou necessidade?
-- Quem é o usuário alvo?
-- Qual é o contexto de uso?
+1. Use `question` para coletar TODAS as informações abaixo (se não fornecidas no prompt):
+   - Título da feature
+   - Problema que resolve
+   - Usuário alvo
+   - Requisitos funcionais (pelo menos 1)
+   - Requisitos não-funcionais (se houver)
+   - Critérios de aceitação por requisito
+   - Casos de teste por requisito (pelo menos 1 CT por REQ)
 
-### 2. Requisitos Funcionais
-- Quais funcionalidades são necessárias?
-- Quais são os fluxos de usuário esperados?
-- Quais integrações são necessárias?
+2. Use a ferramenta `spec-validator` para validar o spec gerado.
 
-### 3. Requisitos Não-Funcionais
-- Quais são as restrições de performance?
-- Quais são os requisitos de segurança?
-- Quais são as considerações de usabilidade?
+3. Salve em `docs/spec/<feature-name-slug>.spec.md`
 
-### 4. Critérios de Aceitação
-- Como o sucesso será medido?
-- Quais são os casos de teste principais?
-- Quais são os edge cases conhecidos?
+4. Informe ao usuário:
+   - Caminho do arquivo gerado
+   - Quantidade de REQs, NFRs e CTs
+   - Status da validação
 
-### 5. Considerações Técnicas
-- Quais tecnologias devem ser usadas?
-- Quais são as limitações do sistema?
-- Quais são as dependências?
+## Modelo de Spec (use o template em docs/spec/TEMPLATE.spec.md)
 
-Retorne o prompt adaptado seguindo este framework.
-Se informações essenciais estiverem faltando, pergunte ao usuário ANTES de gerar o prompt final.
+Toda spec DEVE conter:
+
+### Frontmatter (YAML)
+```yaml
+---
+title: "Nome da Feature"
+status: "draft"
+author: "Nexus Orquestrador"
+created: "2026-05-13"
+updated: "2026-05-13"
+version: "0.1.0"
+---
+```
+
+### Requisitos Funcionais (REQ-NNN)
+Cada requisito DEVE ter:
+- ID: REQ-001, REQ-002, etc.
+- Descrição clara
+- Prioridade (alta, media, baixa)
+- Critérios de aceitação (lista de condições)
+- Casos de teste (CT-NNN.N):
+  - CT-001.1: Caminho feliz
+  - CT-001.2: Cenário de erro
+  - CT-001.3: Edge case (se aplicável)
+
+### Requisitos Não-Funcionais (NFR-NNN)
+Cada NFR DEVE ter:
+- ID: NFR-001, etc.
+- Descrição
+- Métrica de medição
+- Prioridade
+
+### Validação
+Sempre execute ao final:
+```
+Use tool: spec-validator filePath=docs/spec/<arquivo>.spec.md
+```
+
+Se houver erros de validação, corrija antes de entregar ao usuário.
