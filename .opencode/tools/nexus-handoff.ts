@@ -20,6 +20,23 @@ function ensureHandoffDir(baseDir: string): string {
   return dir;
 }
 
+/**
+ * Safely parses a JSON array string. If parsing fails, treats the string
+ * as a single item (or empty/undefined as empty array).
+ */
+function safeParseArray(input: string | undefined | null): string[] {
+  if (!input) return [];
+  try {
+    const parsed = JSON.parse(input);
+    if (Array.isArray(parsed)) return parsed;
+    // Valid JSON but not an array — wrap in array
+    return [String(parsed)];
+  } catch {
+    // Not valid JSON — treat as single string item
+    return [input.trim()];
+  }
+}
+
 export default tool({
   description: "Cria e aplica documentos de handoff para passar contexto entre sessões ou agentes do harness Nexus.",
   args: {
@@ -64,8 +81,8 @@ export default tool({
           id,
           title,
           summary: summary || "Sem resumo disponível",
-          nextSteps: nextSteps ? JSON.parse(nextSteps) : [],
-          artifacts: artifacts ? JSON.parse(artifacts) : [],
+          nextSteps: safeParseArray(nextSteps),
+          artifacts: safeParseArray(artifacts),
           pending: pending || "Nenhum",
           createdAt: new Date().toISOString(),
           fromAgent: context.agent,
