@@ -16,6 +16,8 @@ O Nexus usa um **harness de 5 estágios** (PLAN → ANALYZE → BUILD → REVIEW
 | **Sub-agents** | `.opencode/agents/*.md` | Agentes especializados delegáveis |
 | **Custom Tools** | `.opencode/tools/*.ts` | Ferramentas customizadas (log, memória, handoff) |
 | **Plugin** | `.opencode/plugins/nexus-plugin.ts` | Observabilidade e hooks de ciclo de vida |
+| **oh-my-opencode-slim** | `~/.config/opencode/oh-my-opencode-slim.json` | Orquestração multi-agente com roteamento de modelos |
+| **Superpowers** | `superpowers@git+https://github.com/obra/superpowers.git` | 500+ skills de workflow e boas práticas |
 
 ## Agentes do Ecossistema
 

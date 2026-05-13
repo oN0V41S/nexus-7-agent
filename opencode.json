@@ -107,7 +107,8 @@
   ],
 
   "plugin": [
-    ".opencode/plugins/nexus-plugin.ts"
+    ".opencode/plugins/nexus-plugin.ts",
+    "superpowers@git+https://github.com/obra/superpowers.git"
   ],
 
   "command": {
