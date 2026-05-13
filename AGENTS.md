@@ -25,6 +25,7 @@ O Nexus usa um **harness de 5 estágios** (PLAN → ANALYZE → BUILD → REVIEW
 | `@security-secret-auditor` | subagent | Auditoria de segurança no código |
 | `@quality-assurance-analyst` | subagent | Testes e validação de qualidade |
 | `@docs-architect` | subagent | Documentação técnica |
+| `@testsprite-mcp-agent` | subagent | Integração e orquestração do TestSprite MCP Server para testes automatizados |
 
 ## Skills do Ecossistema
 
@@ -39,6 +40,7 @@ O Nexus usa um **harness de 5 estágios** (PLAN → ANALYZE → BUILD → REVIEW
 | `commit-push` | Fluxo de commit, documentação e push |
 | `mem-search` | Consulta de memória persistente com progressive disclosure |
 | `agent-creator` | Meta-agente que cria outros agentes a partir de descrição natural |
+| `testsprite-mcp` | Skill para orquestração do fluxo completo de testes automatizados com TestSprite MCP Server |
 
 ## Comandos Customizados
 

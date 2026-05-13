@@ -2,6 +2,19 @@
   "$schema": "https://opencode.ai/config.json",
   "autoupdate": true,
 
+  "provider": {
+    "opencode": {
+      "options": {
+        "apiKey": "{env:OPENCODE_API_KEY}"
+      }
+    },
+    "gemini": {
+      "options": {
+        "apiKey": "{env:GEMINI_API_KEY}"
+      }
+    }
+  },
+
   "default_agent": "orchestrator",
   "agent": {
     "orchestrator": {
@@ -60,6 +73,31 @@
         "write": "allow",
         "edit": "allow",
         "bash": "ask"
+      }
+    },
+    "testsprite-mcp-agent": {
+      "description": "Integração e orquestração do TestSprite MCP Server para testes automatizados de UI e API",
+      "mode": "subagent",
+      "model": "anthropic/claude-sonnet-4-5",
+      "temperature": 0.1,
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": true,
+        "glob": true,
+        "grep": true,
+        "bash": true,
+        "webfetch": true,
+        "websearch": true,
+        "task": true,
+        "nexus-log": true,
+        "nexus-memory": true,
+        "nexus-handoff": true
+      },
+      "permission": {
+        "write": "allow",
+        "edit": "allow",
+        "bash": "allow"
       }
     }
   },
