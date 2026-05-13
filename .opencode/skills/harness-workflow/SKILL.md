@@ -1,6 +1,6 @@
 ---
 name: harness-workflow
-description: Define o pipeline de 5 estágios (PLAN → ANALYZE → BUILD → REVIEW → DOCUMENT) para orquestração de tarefas no ecossistema Nexus 7 Agent.
+description: Define o pipeline de 6 estágios (SPEC → PLAN → ANALYZE → BUILD → REVIEW → DOCUMENT) para orquestração de tarefas no ecossistema Nexus 7 Agent. Inclui geração e validação de spec formal (Spec Driven Development).
 ---
 
 # Harness Workflow Skill
@@ -20,7 +20,28 @@ Define o pipeline de execução do ecossistema Nexus. Use esta skill sempre que 
 - Correções rápidas de bugs (use o fluxo direto)
 - Tarefas puramente de investigação/leitura de código
 
-## Pipeline de 5 Estágios
+## Pipeline de 6 Estágios (SPEC + 5 originais)
+
+### Sub-estágio 0: SPEC (Geração de Spec)
+
+**Objetivo:** Produzir um documento de spec formal (.spec.md) antes de qualquer planejamento ou implementação.
+
+**Atividades:**
+1. Use o comando `/spec-gen` para gerar a spec a partir dos requisitos do usuário
+2. Valide a spec com a tool `spec-validator`
+3. Salve em `docs/spec/<feature-name>.spec.md`
+4. Apresente a spec ao usuário para aprovação ANTES de prosseguir
+5. Se o usuário aprovar, mude o status para "approved" e vá para PLAN
+6. Se o usuário solicitar mudanças, ajuste a spec e repita a validação
+
+**Entregável:** `docs/spec/<feature-name>.spec.md` aprovado pelo usuário.
+
+**Critérios:**
+- [ ] Spec contém pelo menos 1 REQ-ID
+- [ ] Cada REQ-ID tem pelo menos 2 CTs (happy path + error)
+- [ ] Frontmatter YAML completo (title, status, version, author)
+- [ ] spec-validator retorna status "valid"
+- [ ] Usuário aprovou explicitamente a spec
 
 ### Estágio 1: PLAN
 
@@ -86,6 +107,13 @@ Define o pipeline de execução do ecossistema Nexus. Use esta skill sempre que 
 
 **Entregável:** Relatório de qualidade com status dos checks.
 
+**Validação SDD (se spec existir):**
+6. Se uma spec existe em `docs/spec/` para esta feature:
+   - Extraia os REQ-IDs da spec
+   - Verifique se os testes cobrem todos os REQ-IDs (requirements coverage)
+   - Reporte requisitos sem testes como falha de qualidade
+   - Se a spec tem status "approved" mas testes falham, bloqueie o pipeline
+
 ### Estágio 5: DOCUMENT
 
 **Objetivo:** Documentar as mudanças para manutenção futura.
@@ -137,9 +165,9 @@ Use a skill `mem-search` para consultar sessões anteriores:
 Se em qualquer estágio for identificado um problema que exija volta ao estágio anterior:
 
 ```
-DOCUMENT → REVIEW → BUILD → ANALYZE → PLAN
-          ↑        ↑         ↑          ↑
-          └────────┴─────────┴──────────┘
+DOCUMENT → REVIEW → BUILD → ANALYZE → PLAN → SPEC
+          ↑        ↑         ↑          ↑      ↑
+          └────────┴─────────┴──────────┴──────┘
 ```
 
 Exemplo: se nos testes (REVIEW) um problema arquitetural for descoberto, volte ao ANALYZE ou BUILD. Se o requisito mudar, volte ao PLAN.
