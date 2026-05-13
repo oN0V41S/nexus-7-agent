@@ -256,7 +256,7 @@ const NexusPlugin: Plugin = async (ctx) => {
 
       // Contexto do harness
       output.context.push(
-        "[Nexus Harness] Projeto usa harness de 5 estágios: PLAN → ANALYZE → BUILD → REVIEW → DOCUMENT.",
+        "[Nexus Harness] Projeto usa harness de 6 estágios: SPEC → PLAN → ANALYZE → BUILD → REVIEW → DOCUMENT.",
       );
       output.context.push(
         "[Nexus Harness] Sub-agents: @security-secret-auditor, @quality-assurance-analyst, @docs-architect.",

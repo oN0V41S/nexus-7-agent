@@ -149,7 +149,7 @@ testsprite_rerun_tests({
 
 ## Fluxo de Integração com o Pipeline Nexus
 
-O agente `testsprite-mcp-agent` se integra ao pipeline de 5 estágios do Nexus:
+O agente `testsprite-mcp-agent` se integra ao pipeline de 6 estágios do Nexus (SPEC → PLAN → ANALYZE → BUILD → REVIEW → DOCUMENT):
 
 | Estágio Nexus | Ação do TestSprite Agent |
 |---|---|
