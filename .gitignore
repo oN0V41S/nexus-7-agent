@@ -5,3 +5,4 @@ bun.lock
 .gitignore
 
 .env.local
+.env

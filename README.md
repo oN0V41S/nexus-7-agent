@@ -1,89 +1,106 @@
-# Nexus 7 Agent 🤖
+# Nexus 7 Agent
 
 ![Status](https://img.shields.io/badge/status-active-success.svg)
-![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=flat&logo=docker&logoColor=white)
-![n8n](https://img.shields.io/badge/n8n-workflow-ff6b6b)
-![Ollama](https://img.shields.io/badge/ollama-local_llm-black)
+![OpenCode](https://img.shields.io/badge/OpenCode-ai_editor-blue)
+![MCP](https://img.shields.io/badge/MCP-connected-green)
 
-**Nexus 7 Agent** é um ecossistema de Agentes de IA 100% local, projetado para orquestração de tarefas, automação de código e gestão de conhecimento pessoal sem depender de APIs externas pagas.
-
-O projeto utiliza **Docker** para containerização, **Ollama** como motor de inferência (LLM) e **n8n** como cérebro lógico e conector de ferramentas.
+**Nexus 7 Agent** é um ecossistema de Agentes de IA para orquestração de tarefas, automação de código e gestão de conhecimento, construído sobre o OpenCode com pipeline harness de 5 estágios.
 
 ## 🏗️ Arquitetura
 
 ```mermaid
 graph TD
-    User[👨‍💻 User] -->|Chat & Commands| WebUI[Open WebUI]
-    User -->|Workflow Design| N8N[n8n Orchestrator]
+    User[Usuário] -->|Comandos| OpenCode[OpenCode AI Editor]
     
-    subgraph "Docker Local Host"
-        WebUI -->|API Call| Ollama[🦙 Ollama Inference]
-        N8N -->|Chain execution| Ollama
-        N8N -->|Git Ops| GitHub[GitHub API]
-        N8N -->|RAG| VectorDB[(Vector Store)]
+    subgraph "Orquestração"
+        OpenCode -->|Pipeline Harness| Orchestrator[Orquestrador Nexus]
+        Orchestrator -->|Delega| SubAgents[Agentes Especializados]
+        Orchestrator -->|Skills| Superpowers[Superpowers 500+ skills]
     end
     
-    Ollama -->|Load| Models[Llama3 / Qwen2.5-Coder]
+    subgraph "MCP Servers"
+        Orchestrator -->|Consulta| Notion[Notion MCP - 2º Cérebro]
+        Orchestrator -->|Navegação| Playwright[Playwright MCP - Web]
+        Orchestrator -->|Memória| Memory[Nexus Memory MCP - SQLite]
+    end
+    
+    subgraph "Providers"
+        OpenCode -->|OpenAI| GPT[GPT-5.5]
+        OpenCode -->|Google| Gemini[Gemini]
+    end
+    
+    Orchestrator -->|Dashboard| Dashboard[Nexus Dashboard Web]
 ```
 
 ## 🚀 Funcionalidades
 
-- **Local Privacy First:** Nenhum dado sai da sua máquina a menos que explicitamente configurado.
-- **Code Assistant:** Integração com GitHub para Code Reviews autônomos.
-- **Workflow Automation:** Fluxos complexos visuais via n8n.
-- **Multi-Model Support:** Alternância fácil entre modelos (ex: DeepSeek para raciocínio, Qwen para código).
+- **Pipeline Harness de 5 Estágios:** PLAN → ANALYZE → BUILD → REVIEW → DOCUMENT
+- **Agentes Especializados:** Delegação inteligente para sub-agents (segurança, QA, documentação, testes)
+- **MCP Servers:** Integração com Notion (segundo cérebro) e Playwright (navegação web)
+- **Memória Persistente:** Contexto entre sessões via SQLite + FTS5
+- **Dashboard Web:** UI visual para logs, memória e handoffs
+- **Multi-Provider:** Suporte a OpenAI e Google Gemini
 
 ## 🛠️ Tech Stack
 
-- **Infra:** Docker & Docker Compose
-- **LLM Engine:** Ollama (Suporte a GGUF)
-- **Orchestration:** n8n (Self-hosted)
-- **UI:** Open WebUI (Opcional)
+| Camada | Tecnologia |
+|--------|-----------|
+| **Orquestrador** | OpenCode + oh-my-opencode-slim |
+| **LLM Providers** | OpenAI (GPT-5.5), Google (Gemini) |
+| **MCP Servers** | Notion, Playwright, Nexus Memory |
+| **Plugin System** | Superpowers (500+ skills), Nexus Plugin |
+| **Pipeline** | Harness de 5 estágios (PLAN → ANALYZE → BUILD → REVIEW → DOCUMENT) |
+| **Custom Tools** | nexus-log, nexus-memory, nexus-handoff |
+| **Dashboard** | Nexus Dashboard (Express Web UI) |
+| **Storage** | SQLite com FTS5 |
 
 ## ⚡ Quick Start
 
 ### Pré-requisitos
-- Docker & Docker Compose instalados.
-- GPU (NVIDIA) recomendada para melhor performance, mas roda em CPU.
+- [OpenCode](https://opencode.ai) instalado
+- Node.js 18+
+- Chaves de API para os providers desejados
 
 ### Instalação
 
 1. Clone o repositório:
    ```bash
-   git clone [https://github.com/SEU_USUARIO/nexus-7-agent.git](https://github.com/SEU_USUARIO/nexus-7-agent.git)
+   git clone https://github.com/oN0V41S/nexus-7-agent.git
    cd nexus-7-agent
    ```
 
 2. Configure as variáveis de ambiente:
    ```bash
-   cp .env.example .env
-   # Edite o .env com suas chaves (se necessário para GitHub, etc)
+   cp .env.examle .env
+   # Edite o .env com suas chaves
    ```
 
-3. Suba o stack:
+3. Abra o projeto no OpenCode:
    ```bash
-   docker-compose up -d
+   opencode .
    ```
 
-4. Baixe o modelo de IA (Exemplo):
-   ```bash
-   docker exec -it ollama ollama run qwen2.5-coder:7b
-   ```
+## 🧠 Agentes do Ecossistema
 
-### Acessando os Serviços
-- **n8n (Fluxos):** `http://localhost:5678`
-- **Open WebUI (Chat):** `http://localhost:3000`
+| Agente | Modo | Função |
+|--------|------|--------|
+| `@orchestrator` | primary | Orquestrador principal do pipeline |
+| `@security-secret-auditor` | subagent | Auditoria de segurança |
+| `@quality-assurance-analyst` | subagent | Testes e validação |
+| `@docs-architect` | subagent | Documentação técnica |
+| `@testsprite-mcp-agent` | subagent | Testes automatizados |
 
-## 🧠 Workflows Inclusos
+## 📋 Comandos
 
-Os fluxos de automação estão salvos na pasta `/workflows`. Para importar:
-1. Abra o n8n.
-2. Vá em "Workflows" > "Import from File".
-3. Selecione o arquivo JSON desejado.
-
-## 🤝 Contribuição
-
-Sinta-se livre para abrir Issues e Pull Requests para melhorar os fluxos do Nexus 7.
+| Comando | Descrição |
+|---------|-----------|
+| `/pipeline` | Inicia o pipeline harness |
+| `/plan` | Planeja feature |
+| `/security` | Auditoria de segurança |
+| `/qa` | Testes e qualidade |
+| `/docs` | Documentação técnica |
+| `/memory` | Consulta memória persistente |
+| `/commit-&-docs` | Commit + documentação |
 
 ## 📄 Licença
 

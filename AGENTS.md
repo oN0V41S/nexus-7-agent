@@ -46,6 +46,7 @@ O Nexus usa um **harness de 5 estágios** (PLAN → ANALYZE → BUILD → REVIEW
 | `agent-creator` | Meta-agente que cria outros agentes a partir de descrição natural |
 | `testsprite-mcp` | Skill para orquestração do fluxo completo de testes automatizados com TestSprite MCP Server |
 | `auto-discovery` | Escaneia repositório, detecta gaps e gera agentes/skills automaticamente |
+| `notion-agent-copilot` | Acessa a página Agent Copilot no Notion via MCP (busca, leitura, comentários e atualizações) |
 
 ## Comandos Customizados
 
