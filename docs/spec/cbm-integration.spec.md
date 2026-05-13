@@ -1,10 +1,10 @@
 ---
 title: "Integração codebase-memory-mcp no Ecossistema Nexus"
-status: "approved"
+status: "implemented"
 author: "Nexus Orquestrador"
 created: "2026-05-13"
 updated: "2026-05-13"
-version: "0.2.0"
+version: "1.0.0"
 ---
 
 # Integração codebase-memory-mcp no Nexus — Spec
@@ -26,10 +26,10 @@ version: "0.2.0"
 **Descrição:** Baixar e instalar o binary do CBM para Linux amd64 no ambiente de desenvolvimento.
 **Prioridade:** Alta
 **Critérios de Aceitação:**
-- [ ] Binary `codebase-memory-mcp` disponível no `$PATH`
-- [ ] Versão mais recente (v0.6.1+) instalada
-- [ ] `codebase-memory-mcp --version` retorna sem erro
-- [ ] Binary verificável via SHA-256 checksum
+- [x] Binary `codebase-memory-mcp` disponível no `$PATH`
+- [x] Versão mais recente (v0.6.1+) instalada
+- [x] `codebase-memory-mcp --version` retorna sem erro
+- [x] Binary verificável via SHA-256 checksum
 **Casos de Teste:**
 - `CT-001.1`: Executar `codebase-memory-mcp --version` → saída contém versão
 - `CT-001.2`: Verificar que binary está em `~/.local/bin/` ou diretório configurado
@@ -41,9 +41,9 @@ version: "0.2.0"
 **Descrição:** Executar `index_repository` para construir o knowledge graph do repositório Nexus.
 **Prioridade:** Alta
 **Critérios de Aceitação:**
-- [ ] Comando via CLI: `codebase-memory-mcp cli index_repository '{"repo_path": "/workspaces/nexus-7-agent"}'`
-- [ ] Graph contém nós para funções, classes, arquivos do projeto
-- [ ] Indexação persiste entre sessões (SQLite em `~/.cache/codebase-memory-mcp/`)
+- [x] Comando via CLI: `codebase-memory-mcp cli index_repository '{"repo_path": "/workspaces/nexus-7-agent"}'`
+- [x] Graph contém nós para funções, classes, arquivos do projeto
+- [x] Indexação persiste entre sessões (SQLite em `~/.cache/codebase-memory-mcp/`)
 **Casos de Teste:**
 - `CT-002.1`: Indexar repositório → mensagem de sucesso com contagem de nós/arestas
 - `CT-002.2`: `list_projects` → lista o projeto "nexus-7-agent"
@@ -55,9 +55,9 @@ version: "0.2.0"
 **Descrição:** Registrar o CBM como MCP server no `opencode.json` do Nexus para que todos os agentes possam utilizar suas tools.
 **Prioridade:** Alta
 **Critérios de Aceitação:**
-- [ ] Entry em `mcpServers` no `opencode.json` apontando para o binary
-- [ ] Após restart, agentes Nexus enxergam as 14 tools do CBM
-- [ ] Configuração global (não por projeto)
+- [x] Entry em `mcpServers` no `opencode.json` apontando para o binary
+- [x] Após restart, agentes Nexus enxergam as 14 tools do CBM
+- [x] Configuração global (não por projeto)
 **Casos de Teste:**
 - `CT-003.1`: Verificar `opencode.json` contém entry `codebase-memory-mcp`
 - `CT-003.2`: Verificar que o comando do MCP server é o path absoluto do binary
@@ -68,10 +68,10 @@ version: "0.2.0"
 **Descrição:** Criar agente especializado `@cbm-agent` no ecossistema Nexus que saiba usar as 14 tools do codebase-memory-mcp para análise de código.
 **Prioridade:** Alta
 **Critérios de Aceitação:**
-- [ ] Agente criado em `.opencode/agents/cbm-agent.md`
-- [ ] Descrição clara das 14 tools disponíveis
-- [ ] Workflow de uso: search_graph → trace → architecture
-- [ ] Registrado em `AGENTS.md`
+- [x] Agente criado em `.opencode/agents/cbm-agent.md`
+- [x] Descrição clara das 14 tools disponíveis
+- [x] Workflow de uso: search_graph → trace → architecture
+- [x] Registrado em `AGENTS.md`
 **Casos de Teste:**
 - `CT-004.1`: Arquivo `.opencode/agents/cbm-agent.md` existe com frontmatter válido
 - `CT-004.2`: `AGENTS.md` contém linha na tabela de agentes
@@ -83,10 +83,10 @@ version: "0.2.0"
 **Descrição:** Criar skill dedicada que documenta como usar as tools do CBM, incluindo exemplos de queries Cypher, busca estrutural, rastreamento de chamadas e análise de arquitetura.
 **Prioridade:** Média
 **Critérios de Aceitação:**
-- [ ] Skill criada em `.opencode/skills/cbm-agent/SKILL.md`
-- [ ] Exemplos de uso para cada tool relevante
-- [ ] Workflow de análise de código (roteiro para o agente)
-- [ ] Registrada em `AGENTS.md`
+- [x] Skill criada em `.opencode/skills/cbm-agent/SKILL.md`
+- [x] Exemplos de uso para cada tool relevante
+- [x] Workflow de análise de código (roteiro para o agente)
+- [x] Registrada em `AGENTS.md`
 **Casos de Teste:**
 - `CT-005.1`: Arquivo SKILL.md existe com frontmatter válido
 - `CT-005.2`: Contém exemplos de search_graph, trace_call_path, get_architecture
@@ -98,9 +98,9 @@ version: "0.2.0"
 **Descrição:** Criar comando customizado `/cbm-query` que delega consultas ao CBM via subagent, permitindo queries Cypher rápidas sem sair do chat.
 **Prioridade:** Média
 **Critérios de Aceitação:**
-- [ ] Comando criado em `.opencode/commands/cbm-query.md`
-- [ ] Aceita argumento: query Cypher ou nome de função
-- [ ] Delega ao `@cbm-agent`
+- [x] Comando criado em `.opencode/commands/cbm-query.md`
+- [x] Aceita argumento: query Cypher ou nome de função
+- [x] Delega ao `@cbm-agent`
 **Casos de Teste:**
 - `CT-006.1`: Arquivo de comando existe
 - `CT-006.2`: Descrição menciona delegação ao @cbm-agent
@@ -111,8 +111,8 @@ version: "0.2.0"
 **Descrição:** O pipeline do Nexus deve indexar automaticamente o repositório (ou verificar indexação existente) antes de executar estágios que dependem de análise de código (ANALYZE).
 **Prioridade:** Baixa
 **Critérios de Aceitação:**
-- [ ] Estágio ANALYZE do pipeline verifica se repositório está indexado
-- [ ] Se não estiver, executa `index_repository` automaticamente
+- [x] Estágio ANALYZE do pipeline verifica se repositório está indexado
+- [x] Se não estiver, executa `index_repository` automaticamente
 **Casos de Teste:**
 - `CT-007.1`: Executar pipeline → mensagem "Verificando indexação CBM..."
 - `CT-007.2`: Se não indexado, `index_repository` é chamado via CLI
@@ -163,3 +163,4 @@ version: "0.2.0"
 |--------|------|-------|----------|
 | 0.1.0 | 2026-05-13 | Nexus Orquestrador | Criação inicial |
 | 0.2.0 | 2026-05-13 | Nexus Orquestrador | Adicionados CTs de erro/edge case por REQ |
+| 1.0.0 | 2026-05-13 | Nexus Orquestrador | Implementação completa: binary v0.6.1, repo indexado (629 nós), 14 MCP tools, agente/skill/comando, integração no pipeline ANALYZE |

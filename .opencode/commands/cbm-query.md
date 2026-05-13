@@ -23,20 +23,24 @@ Execute uma consulta no knowledge graph do codebase-memory-mcp usando os argumen
 /cbm-query "Quais funções chamam a função main?"
 ```
 
+## Projeto Padrão
+
+Sempre inclua o parâmetro `"project": "workspaces-nexus-7-agent"` nas consultas. Sem o project name, o CBM retorna erro.
+
 ## Fluxo
 
 1. Use `bash` com `codebase-memory-mcp cli` para executar a consulta
-2. Se for uma Cypher query, use `query_graph`
+2. Se for uma Cypher query, use `query_graph` com o project padrão
 3. Se for um nome de função, use `search_graph` primeiro para descobrir o nome exato, depois `trace_call_path`
 4. Se for linguagem natural, interprete e traduza para a tool CBM apropriada
 5. Apresente os resultados formatados
 
 ```bash
-# Cypher query:
-codebase-memory-mcp cli query_graph '{"query": "$ARGUMENTS"}' 2>/dev/null | grep -v "^level="
+# Cypher query (sempre com project):
+codebase-memory-mcp cli query_graph '{"query": "$ARGUMENTS", "project": "workspaces-nexus-7-agent"}' 2>/dev/null | grep -v "^level="
 
-# Nome de função → search primeiro:
-codebase-memory-mcp cli search_graph '{"name_pattern": ".*$ARGUMENTS.*", "label": "Function"}' 2>/dev/null | grep -v "^level="
+# Nome de função → search primeiro (sempre com project):
+codebase-memory-mcp cli search_graph '{"name_pattern": ".*$ARGUMENTS.*", "label": "Function", "project": "workspaces-nexus-7-agent"}' 2>/dev/null | grep -v "^level="
 ```
 
 ## Exemplos
