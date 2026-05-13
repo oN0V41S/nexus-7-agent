@@ -6,12 +6,12 @@ Ecossistema de Agentes de IA 100% local para orquestração de tarefas, automaç
 
 ## Harness de Orquestração
 
-O Nexus usa um **harness de 5 estágios** (PLAN → ANALYZE → BUILD → REVIEW → DOCUMENT) implementado via OpenCode, com **2 camadas de infraestrutura**:
+O Nexus usa um **harness de 6 estágios** (SPEC → PLAN → ANALYZE → BUILD → REVIEW → DOCUMENT) implementado via OpenCode, com **2 camadas de infraestrutura**:
 
 | Componente | Localização | Função |
 |---|---|---|
 | **Orquestrador** | `.opencode/agents/orchestrator.md` | Agente primário que gerencia o pipeline |
-| **Harness Workflow** | `.opencode/skills/harness-workflow/SKILL.md` | Skill que define os 5 estágios |
+| **Harness Workflow** | `.opencode/skills/harness-workflow/SKILL.md` | Skill que define os 6 estágios |
 | **Pipeline Command** | `.opencode/commands/pipeline.md` | Atalho `/pipeline` para iniciar o ciclo |
 | **Sub-agents** | `.opencode/agents/*.md` | Agentes especializados delegáveis |
 | **Custom Tools** | `.opencode/tools/*.ts` | Ferramentas customizadas (log, memória, handoff) |
@@ -30,12 +30,13 @@ O Nexus usa um **harness de 5 estágios** (PLAN → ANALYZE → BUILD → REVIEW
 | `@quality-assurance-analyst` | subagent | Testes e validação de qualidade |
 | `@docs-architect` | subagent | Documentação técnica |
 | `@testsprite-mcp-agent` | subagent | Integração e orquestração do TestSprite MCP Server para testes automatizados |
+| `@spec-reviewer` | subagent | Revisão de especificações (specs) para completude, consistência e testabilidade |
 
 ## Skills do Ecossistema
 
 | Skill | Descrição |
 |---|---|
-| `harness-workflow` | Pipeline de 5 estágios do harness |
+| `harness-workflow` | Pipeline de 6 estágios do harness (SPEC → PLAN → ANALYZE → BUILD → REVIEW → DOCUMENT) |
 | `project-review` | Revisão de estrutura e arquitetura |
 | `prisma-scaffold` | Scaffold de modelos Prisma |
 | `quality-assurance-analyst` | Validação de qualidade |
@@ -47,13 +48,15 @@ O Nexus usa um **harness de 5 estágios** (PLAN → ANALYZE → BUILD → REVIEW
 | `testsprite-mcp` | Skill para orquestração do fluxo completo de testes automatizados com TestSprite MCP Server |
 | `auto-discovery` | Escaneia repositório, detecta gaps e gera agentes/skills automaticamente |
 | `notion-agent-copilot` | Acessa a página Agent Copilot no Notion via MCP (busca, leitura, comentários e atualizações) |
+| `spec-driven-dev` | Skill de Spec Driven Development para o ecossistema Nexus |
 
 ## Comandos Customizados
 
 | Comando | Descrição |
 |---|---|
 | `/pipeline` | Inicia o pipeline harness para uma tarefa |
-| `/spec-gen` | Adapta prompt para Spec Driven Development |
+| `/spec-gen` | Gera spec formal .spec.md em docs/spec/ (Spec Driven Development) |
+| `/spec-review` | Revisa spec com @spec-reviewer (delega ao spec-reviewer) |
 | `/review-doc` | Revisa documentação contra código |
 | `/create-component` | Cria componentes UI |
 | `/plan` | Planeja feature usando pipeline harness (delega ao orchestrator) |
@@ -71,6 +74,7 @@ O Nexus usa um **harness de 5 estágios** (PLAN → ANALYZE → BUILD → REVIEW
 | `nexus-log` | Log estruturado para `.opencode/logs/`. Níveis: info, warn, error, debug, trace |
 | `nexus-memory` | Persistência de contexto entre sessões em `.opencode/memory/`. Ações: save, load, list, delete, search |
 | `nexus-handoff` | Handoff entre agentes/sessões em `.opencode/memory/handoffs/`. Ações: create, apply, list |
+| `spec-validator` | Valida documentos de spec (.spec.md) contra o JSON schema Nexus |
 
 ## Diretórios de Dados
 
