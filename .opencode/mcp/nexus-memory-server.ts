@@ -17,6 +17,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { createDb, type SqliteDb } from "../tools/sqlite-adapter";
 
 // ============================================================
 // Config
@@ -46,9 +47,9 @@ function resolveBaseDir(): string {
 // Database
 // ============================================================
 
-let db: any = null;
+let db: SqliteDb | null = null;
 
-function getDb(): any {
+function getDb(): SqliteDb {
   if (db) return db;
 
   const baseDir = resolveBaseDir();
@@ -56,10 +57,7 @@ function getDb(): any {
   if (!fs.existsSync(memDir)) fs.mkdirSync(memDir, { recursive: true });
 
   const dbPath = path.join(memDir, DB_FILE);
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const BetterSqlite3 = require("better-sqlite3");
-  db = new BetterSqlite3(dbPath);
-  db.pragma("journal_mode = WAL");
+  db = createDb(dbPath);
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS memories (
