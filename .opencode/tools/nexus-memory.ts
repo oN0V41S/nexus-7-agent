@@ -3,84 +3,211 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 /**
- * Nexus Memory Tool
+ * Nexus Memory Tool v3 — SQLite + FTS5
  *
- * Persistência simples de contexto entre sessões.
- * Armazena pares chave-valor em .opencode/memory/ como arquivos JSON.
- * Permite salvar contexto de uma sessão e recuperá-lo em outra.
+ * Persistência de contexto entre sessões usando SQLite com busca full-text.
+ * Substitui o antigo armazenamento JSON com migração automática.
+ * Handoffs continuam como JSON em .opencode/memory/handoffs/.
  */
 
 const MEMORY_DIR = ".opencode/memory";
+const DB_FILE = "nexus-memory.db";
+const HANDOFF_DIR = ".opencode/memory/handoffs";
 
-function ensureMemoryDir(baseDir: string): string {
-  const dir = path.join(baseDir, MEMORY_DIR);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+// ============================================================
+// Database
+// ============================================================
+
+let db: any = null;
+let dbPath: string = "";
+
+function getDb(baseDir: string): any {
+  if (db) return db;
+
+  const memDir = path.join(baseDir, MEMORY_DIR);
+  if (!fs.existsSync(memDir)) fs.mkdirSync(memDir, { recursive: true });
+
+  dbPath = path.join(memDir, DB_FILE);
+  // Dynamic import to avoid issues if not available
+  try {
+    const BetterSqlite3 = require("better-sqlite3");
+    db = new BetterSqlite3(dbPath);
+    db.pragma("journal_mode = WAL");
+    initSchema(db);
+    migrateJsonToSqlite(db, memDir);
+    return db;
+  } catch (e) {
+    throw new Error(`Failed to initialize SQLite: ${e}`);
   }
+}
+
+function initSchema(database: any): void {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS memories (
+      key TEXT,
+      scope TEXT NOT NULL DEFAULT 'session',
+      value TEXT NOT NULL,
+      agent TEXT,
+      sessionID TEXT,
+      savedAt TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (key, scope)
+    );
+
+    CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+      key, scope, value, agent,
+      content='memories',
+      content_rowid='rowid',
+      tokenize='porter unicode61'
+    );
+
+    -- Triggers to keep FTS in sync
+    CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
+      INSERT INTO memories_fts(rowid, key, scope, value, agent)
+      VALUES (new.rowid, new.key, new.scope, new.value, new.agent);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
+      INSERT INTO memories_fts(memories_fts, rowid, key, scope, value, agent)
+      VALUES ('delete', old.rowid, old.key, old.scope, old.value, old.agent);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
+      INSERT INTO memories_fts(memories_fts, rowid, key, scope, value, agent)
+      VALUES ('delete', old.rowid, old.key, old.scope, old.value, old.agent);
+      INSERT INTO memories_fts(rowid, key, scope, value, agent)
+      VALUES (new.rowid, new.key, new.scope, new.value, new.agent);
+    END;
+  `);
+}
+
+function migrateJsonToSqlite(database: any, memDir: string): void {
+  // Check if migration already done
+  const count = database.prepare("SELECT COUNT(*) as c FROM memories").get() as { c: number };
+  if (count.c > 0) return;
+
+  const files = fs.readdirSync(memDir).filter(
+    (f) => f.endsWith(".json") && !f.startsWith("."),
+  );
+
+  if (files.length === 0) return;
+
+  const insert = database.prepare(
+    "INSERT OR IGNORE INTO memories (key, scope, value, agent, sessionID, savedAt) VALUES (?, ?, ?, ?, ?, ?)",
+  );
+
+  const tx = database.transaction(() => {
+    for (const file of files) {
+      try {
+        const content = JSON.parse(fs.readFileSync(path.join(memDir, file), "utf-8"));
+        insert.run(
+          content.key || file.replace(".json", ""),
+          content.scope || "session",
+          JSON.stringify(content.value || content),
+          content.agent || null,
+          content.sessionID || null,
+          content.savedAt || new Date().toISOString(),
+        );
+      } catch {
+        // Skip invalid files
+      }
+    }
+  });
+
+  tx();
+
+  // Move migrated JSON files to backup
+  const backupDir = path.join(memDir, ".migrated");
+  if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+  for (const file of files) {
+    try {
+      fs.renameSync(
+        path.join(memDir, file),
+        path.join(backupDir, file),
+      );
+    } catch {
+      // Skip locked files
+    }
+  }
+}
+
+// ============================================================
+// Handoff helpers (kept as JSON)
+// ============================================================
+
+function ensureHandoffDir(baseDir: string): string {
+  const dir = path.join(baseDir, HANDOFF_DIR);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
 
+// ============================================================
+// Tool
+// ============================================================
+
 export default tool({
-  description: "Persiste e recupera contexto entre sessões do harness Nexus. Memória chave-valor em .opencode/memory/.",
+  description:
+    "Persiste e recupera contexto entre sessões do harness Nexus. SQLite com FTS5. Ações: save, load, list, delete, search.",
   args: {
     action: tool.schema
       .enum(["save", "load", "list", "delete", "search"])
-      .describe("Ação: save (salvar), load (carregar), list (listar chaves), delete (remover), search (buscar texto)"),
+      .describe("Ação: save, load, list, delete, search"),
     key: tool.schema
       .string()
       .optional()
-      .describe("Chave única para o dado (usada em save/load/delete)"),
+      .describe("Chave única (obrigatório para save/load/delete)"),
     value: tool.schema
       .string()
       .optional()
-      .describe("Valor JSON para persistir (usado em save)"),
+      .describe("Valor JSON (obrigatório para save)"),
     scope: tool.schema
       .string()
       .default("session")
-      .describe("Escopo: 'session' (vida curta), 'project' (vida longa), 'agent' (por agente)"),
+      .describe("Escopo: session, project, agent, observations"),
     query: tool.schema
       .string()
       .optional()
-      .describe("Termo de busca textual (usado em action=search)"),
+      .describe("Termo de busca FTS5 (obrigatório para search)"),
     limit: tool.schema
       .number()
       .default(10)
-      .describe("Limite de resultados (usado em search e list)"),
+      .describe("Limite de resultados (search e list)"),
   },
   async execute(args, context) {
     const { action, key, value, scope, query, limit } = args;
-    const memDir = ensureMemoryDir(context.worktree);
+    const database = getDb(context.worktree);
 
     switch (action) {
+      // ============================================================
+      // SAVE
+      // ============================================================
       case "save": {
-        if (!key) throw new Error("key é obrigatório para action=save");
-        if (!value) throw new Error("value é obrigatório para action=save");
+        if (!key) throw new Error("key é obrigatório");
+        if (!value) throw new Error("value é obrigatório");
 
-        const entry = {
-          key,
-          scope,
-          value: JSON.parse(value),
-          savedAt: new Date().toISOString(),
-          agent: context.agent,
-          sessionID: context.sessionID,
-        };
+        const parsed = JSON.parse(value);
+        const now = new Date().toISOString();
 
-        const filePath = path.join(memDir, `${scope}--${key}.json`);
-        fs.writeFileSync(filePath, JSON.stringify(entry, null, 2), "utf-8");
+        database
+          .prepare(
+            `INSERT OR REPLACE INTO memories (key, scope, value, agent, sessionID, savedAt)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+          )
+          .run(key, scope, JSON.stringify(parsed), context.agent, context.sessionID, now);
 
-        return JSON.stringify({
-          status: "saved",
-          key,
-          scope,
-          file: filePath,
-        });
+        return JSON.stringify({ status: "saved", key, scope });
       }
 
+      // ============================================================
+      // LOAD
+      // ============================================================
       case "load": {
-        if (!key) throw new Error("key é obrigatório para action=load");
+        if (!key) throw new Error("key é obrigatório");
 
-        const filePath = path.join(memDir, `${scope}--${key}.json`);
-        if (!fs.existsSync(filePath)) {
+        const row = database
+          .prepare("SELECT * FROM memories WHERE key = ? AND scope = ?")
+          .get(key, scope) as any;
+
+        if (!row) {
           return JSON.stringify({
             status: "not_found",
             key,
@@ -89,89 +216,96 @@ export default tool({
           });
         }
 
-        const content = fs.readFileSync(filePath, "utf-8");
         return JSON.stringify({
           status: "loaded",
           key,
           scope,
-          data: JSON.parse(content),
+          data: {
+            key: row.key,
+            scope: row.scope,
+            value: JSON.parse(row.value),
+            savedAt: row.savedAt,
+            agent: row.agent,
+            sessionID: row.sessionID,
+          },
         });
       }
 
+      // ============================================================
+      // SEARCH (FTS5)
+      // ============================================================
       case "search": {
-        if (!query) throw new Error("query é obrigatório para action=search");
+        if (!query) throw new Error("query é obrigatório");
 
-        const files = fs.readdirSync(memDir).filter((f) => f.endsWith(".json"));
-        const lowerQuery = query.toLowerCase();
-        const results = files
-          .map((f) => {
-            try {
-              const content = JSON.parse(fs.readFileSync(path.join(memDir, f), "utf-8"));
-              const searchableText = JSON.stringify(content).toLowerCase();
-              const score = searchableText.includes(lowerQuery)
-                ? (searchableText.match(new RegExp(lowerQuery, "g")) || []).length
-                : 0;
-              return { file: f, score, entry: content };
-            } catch {
-              return null;
-            }
-          })
-          .filter((r): r is NonNullable<typeof r> => r !== null && r.score > 0)
-          .sort((a, b) => b.score - a.score)
-          .slice(0, limit);
+        // Sanitize FTS5 query: escape special chars, add wildcard
+        const sanitized = query
+          .replace(/['"]/g, "")
+          .split(/\s+/)
+          .map((w) => `"${w}"*`)
+          .join(" AND ");
+
+        const rows = database
+          .prepare(
+            `SELECT m.key, m.scope, m.value, m.agent, m.savedAt,
+                    rank as score
+             FROM memories_fts f
+             JOIN memories m ON m.rowid = f.rowid
+             WHERE memories_fts MATCH ?
+             ORDER BY rank
+             LIMIT ?`,
+          )
+          .all(sanitized, limit) as any[];
 
         return JSON.stringify({
           status: "searched",
           query,
-          count: results.length,
-          results: results.map((r) => ({
-            key: r.entry.key,
-            scope: r.entry.scope,
-            savedAt: r.entry.savedAt,
-            agent: r.entry.agent,
-            summary:
-              typeof r.entry.value === "object" && r.entry.value !== null
-                ? JSON.stringify(r.entry.value).slice(0, 200)
-                : String(r.entry.value).slice(0, 200),
+          count: rows.length,
+          results: rows.map((r: any) => ({
+            key: r.key,
+            scope: r.scope,
+            savedAt: r.savedAt,
+            agent: r.agent,
             score: r.score,
+            summary: JSON.stringify(JSON.parse(r.value)).slice(0, 200),
           })),
         });
       }
 
+      // ============================================================
+      // LIST
+      // ============================================================
       case "list": {
-        const files = fs.readdirSync(memDir).filter((f) => f.endsWith(".json"));
-        const entries = files.map((f) => {
-          const content = JSON.parse(fs.readFileSync(path.join(memDir, f), "utf-8"));
-          return {
-            key: content.key,
-            scope: content.scope,
-            savedAt: content.savedAt,
-            agent: content.agent,
-          };
-        });
+        const rows = database
+          .prepare(
+            `SELECT key, scope, agent, savedAt FROM memories
+             ORDER BY savedAt DESC LIMIT ?`,
+          )
+          .all(limit) as any[];
+
         return JSON.stringify({
           status: "listed",
-          count: entries.length,
-          totalFiles: files.length,
-          entries: entries.slice(0, limit),
+          count: rows.length,
+          entries: rows.map((r: any) => ({
+            key: r.key,
+            scope: r.scope,
+            savedAt: r.savedAt,
+            agent: r.agent,
+          })),
         });
       }
 
+      // ============================================================
+      // DELETE
+      // ============================================================
       case "delete": {
-        if (!key) throw new Error("key é obrigatório para action=delete");
+        if (!key) throw new Error("key é obrigatório");
 
-        const filePath = path.join(memDir, `${scope}--${key}.json`);
-        if (!fs.existsSync(filePath)) {
-          return JSON.stringify({
-            status: "not_found",
-            key,
-            scope,
-          });
-        }
+        const result = database
+          .prepare("DELETE FROM memories WHERE key = ? AND scope = ?")
+          .run(key, scope);
 
-        fs.unlinkSync(filePath);
         return JSON.stringify({
-          status: "deleted",
+          status: result.changes > 0 ? "deleted" : "not_found",
           key,
           scope,
         });

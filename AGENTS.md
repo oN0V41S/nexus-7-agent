@@ -18,6 +18,8 @@ O Nexus usa um **harness de 5 estágios** (PLAN → ANALYZE → BUILD → REVIEW
 | **Plugin** | `.opencode/plugins/nexus-plugin.ts` | Observabilidade e hooks de ciclo de vida |
 | **oh-my-opencode-slim** | `~/.config/opencode/oh-my-opencode-slim.json` | Orquestração multi-agente com roteamento de modelos |
 | **Superpowers** | `superpowers@git+https://github.com/obra/superpowers.git` | 500+ skills de workflow e boas práticas |
+| **MCP Memory Server** | `.opencode/mcp/nexus-memory-server.ts` | Servidor MCP expondo nexus-memory para ferramentas externas |
+| **Dashboard** | `.opencode/dashboard/server.ts` | UI visual para logs, memória, handoffs e agentes |
 
 ## Agentes do Ecossistema
 
@@ -43,6 +45,7 @@ O Nexus usa um **harness de 5 estágios** (PLAN → ANALYZE → BUILD → REVIEW
 | `mem-search` | Consulta de memória persistente com progressive disclosure |
 | `agent-creator` | Meta-agente que cria outros agentes a partir de descrição natural |
 | `testsprite-mcp` | Skill para orquestração do fluxo completo de testes automatizados com TestSprite MCP Server |
+| `auto-discovery` | Escaneia repositório, detecta gaps e gera agentes/skills automaticamente |
 
 ## Comandos Customizados
 
@@ -73,7 +76,9 @@ O Nexus usa um **harness de 5 estágios** (PLAN → ANALYZE → BUILD → REVIEW
 | Diretório | Propósito |
 |---|---|
 | `.opencode/logs/` | Logs estruturados do harness (rotacionados por data e categoria) |
-| `.opencode/memory/` | Dados persistentes entre sessões (JSON) |
+| `.opencode/memory/` | Dados persistentes entre sessões (SQLite + FTS5) |
+| `.opencode/mcp/` | Servidor MCP do Nexus Memory Server |
+| `.opencode/dashboard/` | Dashboard web do ecossistema Nexus |
 | `.opencode/memory/handoffs/` | Documentos de handoff para retomada de contexto |
 | `.opencode/tools/` | Ferramentas customizadas do ecossistema |
 | `.opencode/plugins/` | Plugins de hook do OpenCode |
