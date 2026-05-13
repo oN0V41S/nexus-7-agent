@@ -31,6 +31,7 @@ O Nexus usa um **harness de 6 estágios** (SPEC → PLAN → ANALYZE → BUILD �
 | `@docs-architect` | subagent | Documentação técnica |
 | `@testsprite-mcp-agent` | subagent | Integração e orquestração do TestSprite MCP Server para testes automatizados |
 | `@spec-reviewer` | subagent | Revisão de especificações (specs) para completude, consistência e testabilidade |
+| `@cbm-agent` | subagent | Code intelligence via codebase-memory-mcp (knowledge graph, 14 tools) |
 
 ## Skills do Ecossistema
 
@@ -49,6 +50,7 @@ O Nexus usa um **harness de 6 estágios** (SPEC → PLAN → ANALYZE → BUILD �
 | `auto-discovery` | Escaneia repositório, detecta gaps e gera agentes/skills automaticamente |
 | `notion-agent-copilot` | Acessa a página Agent Copilot no Notion via MCP (busca, leitura, comentários e atualizações) |
 | `spec-driven-dev` | Skill de Spec Driven Development para o ecossistema Nexus |
+| `cbm-agent` | Code intelligence via codebase-memory-mcp knowledge graph (search, trace, architecture) |
 
 ## Comandos Customizados
 
@@ -57,6 +59,7 @@ O Nexus usa um **harness de 6 estágios** (SPEC → PLAN → ANALYZE → BUILD �
 | `/pipeline` | Inicia o pipeline harness para uma tarefa |
 | `/spec-gen` | Gera spec formal .spec.md em docs/spec/ (Spec Driven Development) |
 | `/spec-review` | Revisa spec com @spec-reviewer (delega ao spec-reviewer) |
+| `/cbm-query` | Consulta o knowledge graph CBM (delega ao @cbm-agent) |
 | `/review-doc` | Revisa documentação contra código |
 | `/create-component` | Cria componentes UI |
 | `/plan` | Planeja feature usando pipeline harness (delega ao orchestrator) |

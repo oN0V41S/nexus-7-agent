@@ -64,11 +64,14 @@ Define o pipeline de execução do ecossistema Nexus. Use esta skill sempre que 
 **Objetivo:** Analisar o código existente e identificar riscos antes de implementar.
 
 **Atividades:**
-1. Use `glob` e `grep` para mapear arquivos existentes relacionados
-2. Use `read` para entender código existente que será modificado
-3. Se houver dados sensíveis: use `task` com `@security-secret-auditor`
-4. Se for mudança arquitetural: use skill `project-review`
-5. Documente descobertas relevantes
+1. Se codebase-memory-mcp estiver instalado: verifique indexação com `codebase-memory-mcp cli list_projects`
+2. Se o repositório não estiver indexado: execute `index_repository` via CLI
+3. Use `glob` e `grep` para mapear arquivos existentes relacionados
+4. Use `read` para entender código existente que será modificado
+5. Use `task` com `@cbm-agent` para análise estrutural (search_graph, trace_call_path)
+6. Se houver dados sensíveis: use `task` com `@security-secret-auditor`
+7. Se for mudança arquitetural: use skill `project-review`
+8. Documente descobertas relevantes
 
 **Sub-agents recomendados:**
 - `@security-secret-auditor` — auditoria de segurança

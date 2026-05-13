@@ -95,6 +95,16 @@
         "edit": "allow",
         "bash": "allow"
       }
+    },
+    "cbm-agent": {
+      "description": "Code intelligence via codebase-memory-mcp knowledge graph (14 tools)",
+      "mode": "subagent",
+      "temperature": 0.1,
+      "permission": {
+        "bash": "allow",
+        "read": "allow",
+        "write": "deny"
+      }
     }
   },
 
@@ -141,6 +151,12 @@
       "template": "{file:.opencode/commands/criar-agente.md}\n\n$ARGUMENTS",
       "agent": "orchestrator",
       "subtask": true
+    },
+    "cbm-query": {
+      "description": "Consulta o knowledge graph do codebase-memory-mcp (Cypher query ou nome de função)",
+      "template": "{file:.opencode/commands/cbm-query.md}\n\n$ARGUMENTS",
+      "agent": "cbm-agent",
+      "subtask": true
     }
   },
 
@@ -172,6 +188,11 @@
     "playwright": {
       "type": "local",
       "command": ["npx", "-y", "@playwright/mcp@latest"],
+      "enabled": true
+    },
+    "codebase-memory-mcp": {
+      "type": "local",
+      "command": ["/home/codespace/.local/bin/codebase-memory-mcp"],
       "enabled": true
     }
   }
