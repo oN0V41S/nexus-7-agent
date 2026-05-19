@@ -186,7 +186,7 @@ export default tool({
             `INSERT OR REPLACE INTO memories (key, scope, value, agent, sessionID, savedAt)
              VALUES (?, ?, ?, ?, ?, ?)`,
           )
-          .run(key, scope, JSON.stringify(parsed), context.agent, context.sessionID, now);
+          .run(key, scope, JSON.stringify(parsed), context.agent ?? null, context.sessionID ?? null, now);
 
         return JSON.stringify({ status: "saved", key, scope });
       }
@@ -248,7 +248,7 @@ export default tool({
              ORDER BY rank
              LIMIT ?`,
           )
-          .all(sanitized, limit) as any[];
+          .all(sanitized, limit ?? 10) as any[];
 
         return JSON.stringify({
           status: "searched",
@@ -274,7 +274,7 @@ export default tool({
             `SELECT key, scope, agent, savedAt FROM memories
              ORDER BY savedAt DESC LIMIT ?`,
           )
-          .all(limit) as any[];
+          .all(limit ?? 10) as any[];
 
         return JSON.stringify({
           status: "listed",

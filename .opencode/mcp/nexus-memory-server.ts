@@ -74,6 +74,24 @@ function getDb(): SqliteDb {
       content='memories', content_rowid='rowid',
       tokenize='porter unicode61'
     );
+
+    -- Triggers to keep FTS in sync
+    CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
+      INSERT INTO memories_fts(rowid, key, scope, value, agent)
+      VALUES (new.rowid, new.key, new.scope, new.value, new.agent);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
+      INSERT INTO memories_fts(memories_fts, rowid, key, scope, value, agent)
+      VALUES ('delete', old.rowid, old.key, old.scope, old.value, old.agent);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
+      INSERT INTO memories_fts(memories_fts, rowid, key, scope, value, agent)
+      VALUES ('delete', old.rowid, old.key, old.scope, old.value, old.agent);
+      INSERT INTO memories_fts(rowid, key, scope, value, agent)
+      VALUES (new.rowid, new.key, new.scope, new.value, new.agent);
+    END;
   `);
 
   return db;

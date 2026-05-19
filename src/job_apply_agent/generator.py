@@ -216,6 +216,10 @@ def _render_text_to_pdf(text: str, title: str = "Documento") -> FPDF:
     pdf.set_auto_page_break(auto=True, margin=20)
     pdf.set_font("Helvetica", size=10)
 
+    # Fallback para conteúdo mínimo se vazio
+    if not text or not text.strip():
+        text = "Documento gerado pelo Job Application Agent"
+
     for line in text.split("\n"):
         if not line.strip():
             pdf.ln(4)
@@ -224,10 +228,21 @@ def _render_text_to_pdf(text: str, title: str = "Documento") -> FPDF:
         # Detecta linhas em maiúsculas (cabeçalhos de seção)
         if line.isupper() and len(line) > 3:
             pdf.set_font("Helvetica", "B", 11)
-            pdf.multi_cell(0, 6, line)
-            pdf.set_font("Helvetica", size=10)
+            try:
+                pdf.cell(0, 6, line)
+                pdf.ln()
+            except Exception:
+                pdf.set_font("Helvetica", size=10)
+                pdf.cell(0, 5, line[:50] if len(line) > 50 else line)
+                pdf.ln()
         else:
-            pdf.multi_cell(0, 5, line)
+            try:
+                pdf.cell(0, 5, line)
+                pdf.ln()
+            except Exception:
+                # Fallback para linha truncada se ainda falhar
+                pdf.cell(0, 5, line[:50] if len(line) > 50 else line)
+                pdf.ln()
 
     return pdf
 

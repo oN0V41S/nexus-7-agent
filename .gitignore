@@ -4,6 +4,13 @@ package-lock.json
 bun.lock
 .gitignore
 
+# Python
+__pycache__/
+*.pyc
+
+# Playwright MCP logs/screenshots
+.playwright-mcp/
+
 .env.local
 .env
 
