@@ -19,6 +19,7 @@ O Nexus usa um **harness de 6 estágios** (SPEC → PLAN → ANALYZE → BUILD �
 | **oh-my-opencode-slim** | `~/.config/opencode/oh-my-opencode-slim.json` | Orquestração multi-agente com roteamento de modelos |
 | **Superpowers** | `superpowers@git+https://github.com/obra/superpowers.git` | 500+ skills de workflow e boas práticas |
 | **MCP Memory Server** | `.opencode/mcp/nexus-memory-server.ts` | Servidor MCP expondo nexus-memory para ferramentas externas |
+| **Google Workspace MCP** | `.opencode/mcp/google-workspace/server.mjs` | Servidor MCP local para Google Workspace (Drive, Docs, Sheets, Gmail) |
 | **Dashboard** | `.opencode/dashboard/server.ts` | UI visual para logs, memória, handoffs e agentes |
 
 ## Agentes do Ecossistema
@@ -33,6 +34,9 @@ O Nexus usa um **harness de 6 estágios** (SPEC → PLAN → ANALYZE → BUILD �
 | `@spec-reviewer` | subagent | Revisão de especificações (specs) para completude, consistência e testabilidade |
 | `@cbm-agent` | subagent | Code intelligence via codebase-memory-mcp (knowledge graph, 14 tools) |
 | `@notion-agent` | subagent | Gerenciamento de conteúdo no Notion via MCP (criar, apagar, reestruturar páginas) |
+| `@google-workspace-agent` | subagent | Google Workspace specialist — Drive, Docs, Sheets, Gmail via MCP local com OAuth 2.0 |
+| `@playwright-agent` | subagent | Automação de navegador via Playwright MCP — navegar, clicar, preencher, extrair dados |
+| `@chrome-devtools-agent` | subagent | Debugging frontend via Chrome DevTools MCP — performance, network, console, memory |
 | `@job-apply-agent` | primary | Agente principal do Job Application Workflow — busca, análise, consolidação, geração e aplicação de vagas |
 
 ## Skills do Ecossistema
@@ -53,6 +57,9 @@ O Nexus usa um **harness de 6 estágios** (SPEC → PLAN → ANALYZE → BUILD �
 | `notion-agent-copilot` | Acessa a página Agent Copilot no Notion via MCP (busca, leitura, comentários e atualizações) |
 | `spec-driven-dev` | Skill de Spec Driven Development para o ecossistema Nexus |
 | `cbm-agent` | Code intelligence via codebase-memory-mcp knowledge graph (search, trace, architecture) |
+| `google-workspace` | Acessar e manipular Google Workspace (Drive, Docs, Sheets, Gmail) via MCP server local com OAuth 2.0 |
+| `playwright-automation` | Automação de navegador via Playwright MCP — navegar, clicar, preencher, extrair dados |
+| `chrome-devtools` | Debugging frontend via Chrome DevTools MCP — performance, network, console, memory |
 
 ## Comandos Customizados
 
@@ -71,6 +78,8 @@ O Nexus usa um **harness de 6 estágios** (SPEC → PLAN → ANALYZE → BUILD �
 | `/memory` | Consulta memória persistente do harness |
 | `/criar-agente` | Cria novo agente para o ecossistema Nexus (delega ao orchestrator) |
 | `/commit-&-docs` | Commit + atualização de documentação |
+| `/playwright` | Automação de navegador via Playwright MCP (delega ao @playwright-agent) |
+| `/devtools` | Debugging frontend via Chrome DevTools MCP (delega ao @chrome-devtools-agent) |
 
 ## Custom Tools (Layer 2)
 
