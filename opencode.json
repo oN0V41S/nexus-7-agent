@@ -141,6 +141,28 @@
         "webfetch": "allow",
         "websearch": "allow"
       }
+    },
+    "playwright-agent": {
+      "description": "Automação de navegador via Playwright MCP — navegar, clicar, preencher formulários, extrair dados, testar UI",
+      "mode": "subagent",
+      "temperature": 0.1,
+      "permission": {
+        "read": "allow",
+        "write": "allow",
+        "edit": "allow",
+        "bash": "allow"
+      }
+    },
+    "chrome-devtools-agent": {
+      "description": "Debugging frontend via Chrome DevTools MCP — performance, network, console, memory, accessibility",
+      "mode": "subagent",
+      "temperature": 0.1,
+      "permission": {
+        "read": "allow",
+        "write": "allow",
+        "edit": "allow",
+        "bash": "allow"
+      }
     }
   },
 
@@ -229,6 +251,18 @@
       "template": "{file:.opencode/skills/job-apply-agent/commands/track.md}\n\n$ARGUMENTS",
       "agent": "job-apply-agent",
       "subtask": true
+    },
+    "playwright": {
+      "description": "Automação de navegador via Playwright MCP",
+      "template": "Use o agente @playwright-agent para automação de navegador via Playwright MCP.\n\n$ARGUMENTS\n\nTarefas comuns: navegar para URL, clicar em elementos, preencher formulários, extrair dados de páginas, tirar screenshots, testar fluxos de UI.",
+      "agent": "playwright-agent",
+      "subtask": true
+    },
+    "devtools": {
+      "description": "Debugging frontend via Chrome DevTools MCP",
+      "template": "Use o agente @chrome-devtools-agent para debugging frontend via Chrome DevTools MCP.\n\n$ARGUMENTS\n\nTarefas comuns: analisar performance, inspecionar network requests, ler console logs, verificar accessibility, capturar screenshots, debugar memory leaks.",
+      "agent": "chrome-devtools-agent",
+      "subtask": true
     }
   },
 
@@ -270,6 +304,16 @@
     "chrome-devtools": {
       "type": "local",
       "command": ["npx", "-y", "chrome-devtools-mcp@latest", "--autoConnect"],
+      "enabled": true
+    },
+    "google-workspace": {
+      "type": "local",
+      "command": ["node", ".opencode/mcp/google-workspace/server.mjs"],
+      "enabled": true
+    },
+    "nexus-memory-server": {
+      "type": "local",
+      "command": ["npx", "tsx", ".opencode/mcp/nexus-memory-server.ts"],
       "enabled": true
     }
   }
