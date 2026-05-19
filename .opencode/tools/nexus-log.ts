@@ -53,7 +53,7 @@ export default tool({
   },
   async execute(args, context) {
     const { level, message, category, metadata } = args;
-    const meta = metadata ? JSON.parse(metadata) : {};
+    const meta = metadata ? (typeof metadata === "string" ? JSON.parse(metadata) : metadata) : {};
 
     const logDir = ensureLogDir(context.worktree);
     const logFile = getLogFile(logDir, category);

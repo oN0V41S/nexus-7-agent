@@ -22,6 +22,16 @@ const HANDOFF_DIR = ".opencode/memory/handoffs";
 let db: SqliteDb | null = null;
 let dbPath: string = "";
 
+/**
+ * Safe JSON parse — handles both string and already-parsed values.
+ */
+function tryParseJson(input: any): any {
+  if (typeof input === "string") {
+    try { return JSON.parse(input); } catch { return input; }
+  }
+  return input; // already an object
+}
+
 function getDb(baseDir: string): SqliteDb {
   if (db) return db;
 
@@ -178,7 +188,7 @@ export default tool({
         if (!key) throw new Error("key é obrigatório");
         if (!value) throw new Error("value é obrigatório");
 
-        const parsed = JSON.parse(value);
+        const parsed = typeof value === "string" ? JSON.parse(value) : value;
         const now = new Date().toISOString();
 
         database
@@ -217,7 +227,7 @@ export default tool({
           data: {
             key: row.key,
             scope: row.scope,
-            value: JSON.parse(row.value),
+            value: tryParseJson(row.value),
             savedAt: row.savedAt,
             agent: row.agent,
             sessionID: row.sessionID,
@@ -260,7 +270,7 @@ export default tool({
             savedAt: r.savedAt,
             agent: r.agent,
             score: r.score,
-            summary: JSON.stringify(JSON.parse(r.value)).slice(0, 200),
+            summary: JSON.stringify(tryParseJson(r.value)).slice(0, 200),
           })),
         });
       }
