@@ -16,5 +16,17 @@ Busca vagas em LinkedIn, Glassdoor, Indeed e Monster.
 - LinkedIn → Chrome DevTools MCP (sessão autenticada)
 - Glassdoor, Indeed, Monster → Playwright MCP (headless)
 
-## Output
+## Execução
+Para executar a busca, rode o seguinte comando Python com os argumentos recebidos:
+```bash
+cd /workspaces/nexus-7-agent && PYTHONPATH=src python -m src.job_apply_agent search [termo] [localização] [filtros]
+```
+
+Ou via wrapper:
+```bash
+cd /workspaces/nexus-7-agent && python3 run_job_agent.py search [termo] [localização] [filtros]
+```
+
+## Output esperado
 Lista consolidada de vagas com título, empresa, local, descrição, URL e plataforma de origem.
+Salvo em `~/.job-apply-agent/search_results.json`.

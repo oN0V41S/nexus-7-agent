@@ -33,6 +33,53 @@ Agente central do pipeline de Job Application Workflow. Consome ferramentas MCP 
 - Ollama (análise / geração de texto)
 - Python (PyMuPDF / python-docx / fpdf2)
 
+## Execução
+
+Todos os comandos são implementados como scripts Python no pacote `src.job_apply_agent`.
+Para executar qualquer operação, use:
+
+### Via run_job_agent.py (recomendado)
+```bash
+cd /workspaces/nexus-7-agent && python3 run_job_agent.py [comando] [args]
+```
+
+### Via python -m (alternativa)
+```bash
+cd /workspaces/nexus-7-agent && PYTHONPATH=src python -m src.job_apply_agent [comando] [args]
+```
+
+### Mapeamento comando → Python
+| Comando | Python equivalente |
+|---------|-------------------|
+| `/job-search [q] [loc]` | `python3 run_job_agent.py search [q] [loc]` |
+| `/job-analyze [id]` | `python3 run_job_agent.py analyze [id]` |
+| `/job-consolidate [pdfs]` | `python3 run_job_agent.py consolidate [pdfs]` |
+| `/job-adapt [id]` | `python3 run_job_agent.py adapt [id]` |
+| `/job-apply [id]` | `python3 run_job_agent.py apply [id]` |
+| `/job-track [ação]` | `python3 run_job_agent.py track [ação]` |
+
+### Pacote Python
+```bash
+src/job_apply_agent/
+├── __init__.py      # Versão do pacote
+├── __main__.py      # Entry point python -m
+├── main.py          # CLI dispatch
+├── config.py        # Configurações
+├── search.py        # Busca multi-plataforma
+├── analyzer.py      # Match score
+├── consolidator.py  # PDF → DOCX ATS
+├── generator.py     # Currículo + carta
+├── applicator.py    # Aplicação semiautomática
+├── deduplicator.py  # Desduplicação
+└── tracker.py       # Rastreamento
+```
+
+### Dependências
+```bash
+pip install -r src/job_apply_agent/requirements.txt
+# PyMuPDF, python-docx, fpdf2, httpx
+```
+
 ## Segurança
 - Usa perfil Chrome isolado (`--user-data-dir=/tmp/job-profile`)
 - Nunca armazena senhas
