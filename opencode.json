@@ -105,6 +105,42 @@
         "read": "allow",
         "write": "deny"
       }
+    },
+    "notion-agent": {
+      "description": "Especialista em gerenciar conteúdo no Notion via MCP",
+      "mode": "subagent",
+      "temperature": 0.1,
+      "permission": {
+        "read": "allow",
+        "edit": "allow",
+        "write": "allow",
+        "bash": "ask"
+      }
+    },
+    "job-apply-agent": {
+      "description": "Agente principal do Job Application Workflow - busca, análise, consolidação, geração e aplicação de vagas",
+      "mode": "primary",
+      "temperature": 0.1,
+      "maxSteps": 100,
+      "tools": {
+        "task": true,
+        "question": true,
+        "skill": true,
+        "read": true,
+        "write": true,
+        "edit": true,
+        "glob": true,
+        "grep": true,
+        "bash": true,
+        "webfetch": true,
+        "websearch": true
+      },
+      "permission": {
+        "edit": "allow",
+        "bash": "allow",
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
     }
   },
 
@@ -157,6 +193,42 @@
       "template": "{file:.opencode/commands/cbm-query.md}\n\n$ARGUMENTS",
       "agent": "cbm-agent",
       "subtask": true
+    },
+    "job-search": {
+      "description": "Busca vagas em múltiplas plataformas (LinkedIn, Glassdoor, Indeed, Monster)",
+      "template": "{file:.opencode/skills/job-apply-agent/commands/search.md}\n\n$ARGUMENTS",
+      "agent": "job-apply-agent",
+      "subtask": true
+    },
+    "job-analyze": {
+      "description": "Calcula match score e gaps de competência para vagas encontradas",
+      "template": "{file:.opencode/skills/job-apply-agent/commands/analyze.md}\n\n$ARGUMENTS",
+      "agent": "job-apply-agent",
+      "subtask": true
+    },
+    "job-consolidate": {
+      "description": "Consolida múltiplos PDFs de currículo em DOCX ATS de 1 página",
+      "template": "{file:.opencode/skills/job-apply-agent/commands/consolidate.md}\n\n$ARGUMENTS",
+      "agent": "job-apply-agent",
+      "subtask": true
+    },
+    "job-adapt": {
+      "description": "Gera currículo adaptado e carta de apresentação contextualizada",
+      "template": "{file:.opencode/skills/job-apply-agent/commands/adapt.md}\n\n$ARGUMENTS",
+      "agent": "job-apply-agent",
+      "subtask": true
+    },
+    "job-apply": {
+      "description": "Executa aplicação com aprovação humana via Chrome/Playwright MCP",
+      "template": "{file:.opencode/skills/job-apply-agent/commands/apply.md}\n\n$ARGUMENTS",
+      "agent": "job-apply-agent",
+      "subtask": true
+    },
+    "job-track": {
+      "description": "Atualiza status de candidaturas no Notion e exporta relatórios",
+      "template": "{file:.opencode/skills/job-apply-agent/commands/track.md}\n\n$ARGUMENTS",
+      "agent": "job-apply-agent",
+      "subtask": true
     }
   },
 
@@ -193,6 +265,11 @@
     "codebase-memory-mcp": {
       "type": "local",
       "command": ["/home/codespace/.local/bin/codebase-memory-mcp"],
+      "enabled": true
+    },
+    "chrome-devtools": {
+      "type": "local",
+      "command": ["npx", "-y", "chrome-devtools-mcp@latest", "--autoConnect"],
       "enabled": true
     }
   }

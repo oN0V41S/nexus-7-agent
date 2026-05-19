@@ -1,0 +1,6 @@
+# Job Application Workflow - Python Dependencies
+python-docx>=1.1.0
+PyMuPDF>=1.24.0
+fpdf2>=2.7.0
+httpx>=0.27.0
+pydantic>=2.0.0
