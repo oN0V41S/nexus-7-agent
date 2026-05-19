@@ -17,3 +17,6 @@ __pycache__/
 # Implementation plans (ephemeral context for agent sessions)
 docs/superpowers/plans/*
 !docs/superpowers/plans/.gitkeep
+
+# Codebase Memory knowledge graph (generated index)
+.codebase-memory/
