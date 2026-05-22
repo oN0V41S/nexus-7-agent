@@ -81,6 +81,12 @@ function initSchema(database: any): void {
       INSERT INTO memories_fts(rowid, key, scope, value, agent)
       VALUES (new.rowid, new.key, new.scope, new.value, new.agent);
     END;
+
+    -- Performance indexes
+    CREATE INDEX IF NOT EXISTS idx_memories_scope_savedat ON memories(scope, savedAt DESC);
+    CREATE INDEX IF NOT EXISTS idx_memories_savedat ON memories(savedAt DESC);
+    CREATE INDEX IF NOT EXISTS idx_memories_agent ON memories(agent);
+    CREATE INDEX IF NOT EXISTS idx_memories_session ON memories(sessionID);
   `);
 }
 

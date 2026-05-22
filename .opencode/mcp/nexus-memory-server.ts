@@ -98,6 +98,82 @@ function getDb(): SqliteDb {
 }
 
 // ============================================================
+// Tool Definitions (shared between initialize and tools/list)
+// ============================================================
+
+interface ToolDefinition {
+  name: string;
+  description: string;
+  inputSchema: {
+    type: "object";
+    properties: Record<string, unknown>;
+    required?: string[];
+  };
+}
+
+const TOOL_DEFINITIONS: ToolDefinition[] = [
+  {
+    name: "nexus_memory_save",
+    description: "Save data to Nexus memory store",
+    inputSchema: {
+      type: "object",
+      properties: {
+        key: { type: "string", description: "Unique key" },
+        value: { type: "string", description: "JSON value" },
+        scope: { type: "string", enum: ["session", "project", "agent", "observations"], default: "session" },
+      },
+      required: ["key", "value"],
+    },
+  },
+  {
+    name: "nexus_memory_load",
+    description: "Load data from Nexus memory store",
+    inputSchema: {
+      type: "object",
+      properties: {
+        key: { type: "string", description: "Unique key to load" },
+        scope: { type: "string", default: "session" },
+      },
+      required: ["key"],
+    },
+  },
+  {
+    name: "nexus_memory_search",
+    description: "Full-text search across Nexus memory (FTS5)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Search term" },
+        limit: { type: "number", default: 10 },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "nexus_memory_list",
+    description: "List recent memory entries",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: { type: "number", default: 10, description: "Max entries to return" },
+      },
+    },
+  },
+  {
+    name: "nexus_memory_delete",
+    description: "Delete a memory entry",
+    inputSchema: {
+      type: "object",
+      properties: {
+        key: { type: "string", description: "Key to delete" },
+        scope: { type: "string", default: "session" },
+      },
+      required: ["key"],
+    },
+  },
+];
+
+// ============================================================
 // MCP Protocol (JSON-RPC over stdio)
 // ============================================================
 
@@ -202,8 +278,6 @@ const handlers: Record<string, (params: any) => any> = {
 // ============================================================
 
 // Handle incoming JSON-RPC requests
-let initialized = false;
-
 process.stdin.on("data", (chunk: Buffer) => {
   const lines = chunk.toString().split("\n").filter(Boolean);
 
@@ -217,7 +291,6 @@ process.stdin.on("data", (chunk: Buffer) => {
 
     // --- initialize ---
     if (request.method === "initialize") {
-      initialized = true;
       sendResponse({
         jsonrpc: "2.0",
         id: request.id,
@@ -225,65 +298,16 @@ process.stdin.on("data", (chunk: Buffer) => {
           protocolVersion: "2024-11-05",
           serverInfo: { name: "nexus-memory-server", version: "1.0.0" },
           capabilities: {
-            tools: {
-              nexus_memory_save: {
-                description: "Save data to Nexus memory store",
-                inputSchema: {
-                  type: "object",
-                  properties: {
-                    key: { type: "string", description: "Unique key" },
-                    value: { type: "string", description: "JSON value" },
-                    scope: { type: "string", enum: ["session", "project", "agent", "observations"], default: "session" },
-                  },
-                  required: ["key", "value"],
-                },
-              },
-              nexus_memory_load: {
-                description: "Load data from Nexus memory store",
-                inputSchema: {
-                  type: "object",
-                  properties: {
-                    key: { type: "string" },
-                    scope: { type: "string", default: "session" },
-                  },
-                  required: ["key"],
-                },
-              },
-              nexus_memory_search: {
-                description: "Full-text search across Nexus memory (FTS5)",
-                inputSchema: {
-                  type: "object",
-                  properties: {
-                    query: { type: "string", description: "Search term" },
-                    limit: { type: "number", default: 10 },
-                  },
-                  required: ["query"],
-                },
-              },
-              nexus_memory_list: {
-                description: "List recent memory entries",
-                inputSchema: {
-                  type: "object",
-                  properties: {
-                    limit: { type: "number", default: 10 },
-                  },
-                },
-              },
-              nexus_memory_delete: {
-                description: "Delete a memory entry",
-                inputSchema: {
-                  type: "object",
-                  properties: {
-                    key: { type: "string" },
-                    scope: { type: "string", default: "session" },
-                  },
-                  required: ["key"],
-                },
-              },
-            },
+            tools: {}, // Signal tool support; actual definitions in tools/list
           },
         },
       });
+      continue;
+    }
+
+    // --- notifications/initialized ---
+    if (request.method === "notifications/initialized") {
+      // No response needed per JSON-RPC for notifications
       continue;
     }
 
@@ -293,10 +317,7 @@ process.stdin.on("data", (chunk: Buffer) => {
         jsonrpc: "2.0",
         id: request.id,
         result: {
-          tools: Object.keys(handlers).map((name) => ({
-            name,
-            description: handlers[name].toString().slice(0, 100),
-          })),
+          tools: TOOL_DEFINITIONS,
         },
       });
       continue;
@@ -324,9 +345,6 @@ process.stdin.on("data", (chunk: Buffer) => {
       continue;
     }
 
-    // --- notifications (no response) ---
-    if (request.method === "notifications/initialized") continue;
-
     // --- unknown ---
     sendError(request.id, -32601, `Method not found: ${request.method}`);
   }
@@ -335,11 +353,4 @@ process.stdin.on("data", (chunk: Buffer) => {
 process.stdin.on("end", () => {
   if (db) db.close();
   process.exit(0);
-});
-
-// Signal ready
-sendResponse({
-  jsonrpc: "2.0",
-  id: null,
-  result: { server: "nexus-memory-server", status: "running" },
 });

@@ -163,6 +163,112 @@
         "edit": "allow",
         "bash": "allow"
       }
+    },
+    "oracle": {
+      "description": "Strategic advisor for architecture, code review, and complex debugging",
+      "mode": "subagent",
+      "temperature": 0.1,
+      "permission": {
+        "read": "allow",
+        "write": "deny",
+        "edit": "deny",
+        "bash": "ask"
+      }
+    },
+    "explorer": {
+      "description": "Fast codebase search and pattern matching",
+      "mode": "subagent",
+      "temperature": 0.1,
+      "permission": {
+        "read": "allow",
+        "write": "deny",
+        "edit": "deny",
+        "bash": "deny"
+      }
+    },
+    "fixer": {
+      "description": "Fast implementation specialist for well-defined tasks",
+      "mode": "subagent",
+      "temperature": 0.1,
+      "permission": {
+        "read": "allow",
+        "write": "allow",
+        "edit": "allow",
+        "bash": "allow"
+      }
+    },
+    "librarian": {
+      "description": "External documentation and library research specialist",
+      "mode": "subagent",
+      "temperature": 0.1,
+      "tools": {
+        "read": true,
+        "webfetch": true,
+        "websearch": true
+      },
+      "permission": {
+        "read": "allow",
+        "write": "deny",
+        "edit": "deny",
+        "bash": "ask",
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
+    },
+    "designer": {
+      "description": "UI/UX design, review and implementation",
+      "mode": "subagent",
+      "temperature": 0.1,
+      "permission": {
+        "read": "allow",
+        "write": "allow",
+        "edit": "allow",
+        "bash": "allow"
+      }
+    },
+    "spec-reviewer": {
+      "description": "Spec review for completeness, consistency and testability",
+      "mode": "subagent",
+      "temperature": 0.1,
+      "permission": {
+        "read": "allow",
+        "write": "deny",
+        "edit": "deny",
+        "bash": "deny"
+      }
+    },
+    "google-workspace-agent": {
+      "description": "Google Workspace specialist — Drive, Docs, Sheets, Gmail",
+      "mode": "subagent",
+      "temperature": 0.1,
+      "permission": {
+        "read": "allow",
+        "write": "allow",
+        "edit": "allow",
+        "bash": "ask"
+      }
+    },
+    "councillor": {
+      "description": "Read-only council advisor for independent analysis",
+      "mode": "subagent",
+      "temperature": 0.1,
+      "permission": {
+        "read": "allow",
+        "write": "deny",
+        "edit": "deny",
+        "bash": "deny"
+      }
+    },
+    "observer": {
+      "description": "Read-only observer for monitoring and analysis",
+      "mode": "subagent",
+      "temperature": 0.1,
+      "permission": {
+        "read": "allow",
+        "write": "deny",
+        "edit": "deny",
+        "bash": "deny"
+      }
     }
   },
 
@@ -176,6 +282,12 @@
   ],
 
   "command": {
+    "super-pipeline": {
+      "description": "Pipeline harness aprimorado: delega cada estágio (SPEC→PLAN→ANALYZE→BUILD→REVIEW→DOCUMENT) a sub-agents especializados com paralelização",
+      "template": "{file:.opencode/commands/super-pipeline.md}\n\n$ARGUMENTS",
+      "agent": "orchestrator",
+      "subtask": true
+    },
     "plan": {
       "description": "Planeja feature usando pipeline harness",
       "template": "{file:.opencode/commands/plan.md}\n\n$ARGUMENTS",

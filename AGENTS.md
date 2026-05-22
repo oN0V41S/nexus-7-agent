@@ -11,8 +11,8 @@ O Nexus usa um **harness de 6 estágios** (SPEC → PLAN → ANALYZE → BUILD �
 | Componente | Localização | Função |
 |---|---|---|
 | **Orquestrador** | `.opencode/agents/orchestrator.md` | Agente primário que gerencia o pipeline |
-| **Harness Workflow** | `.opencode/skills/harness-workflow/SKILL.md` | Skill que define os 6 estágios |
-| **Pipeline Command** | `.opencode/commands/pipeline.md` | Atalho `/pipeline` para iniciar o ciclo |
+| **Harness Workflow** | `.opencode/skills/harness-workflow/SKILL.md` | Skill que define os 6 estágios + SDD |
+| **Super Pipeline Command** | `.opencode/commands/super-pipeline.md` | Atalho `/super-pipeline` — pipeline completo com delegação a sub-agents |
 | **Sub-agents** | `.opencode/agents/*.md` | Agentes especializados delegáveis |
 | **Custom Tools** | `.opencode/tools/*.ts` | Ferramentas customizadas (log, memória, handoff) |
 | **Plugin** | `.opencode/plugins/nexus-plugin.ts` | Observabilidade e hooks de ciclo de vida |
@@ -30,47 +30,42 @@ O Nexus usa um **harness de 6 estágios** (SPEC → PLAN → ANALYZE → BUILD �
 | `@security-secret-auditor` | subagent | Auditoria de segurança no código |
 | `@quality-assurance-analyst` | subagent | Testes e validação de qualidade |
 | `@docs-architect` | subagent | Documentação técnica |
-| `@testsprite-mcp-agent` | subagent | Integração e orquestração do TestSprite MCP Server para testes automatizados |
 | `@spec-reviewer` | subagent | Revisão de especificações (specs) para completude, consistência e testabilidade |
 | `@cbm-agent` | subagent | Code intelligence via codebase-memory-mcp (knowledge graph, 14 tools) |
+| `@testsprite-mcp-agent` | subagent | Integração e orquestração do TestSprite MCP Server para testes automatizados |
 | `@notion-agent` | subagent | Gerenciamento de conteúdo no Notion via MCP (criar, apagar, reestruturar páginas) |
 | `@google-workspace-agent` | subagent | Google Workspace specialist — Drive, Docs, Sheets, Gmail via MCP local com OAuth 2.0 |
 | `@playwright-agent` | subagent | Automação de navegador via Playwright MCP — navegar, clicar, preencher, extrair dados |
 | `@chrome-devtools-agent` | subagent | Debugging frontend via Chrome DevTools MCP — performance, network, console, memory |
 | `@job-apply-agent` | primary | Agente principal do Job Application Workflow — busca, análise, consolidação, geração e aplicação de vagas |
+| `@oracle` | subagent | Advisor estratégico para arquitetura, code review e debugging complexo |
+| `@fixer` | subagent | Especialista em implementação rápida para tarefas bem definidas |
+| `@explorer` | subagent | Busca rápida em codebase com glob/grep/AST |
+| `@librarian` | subagent | Pesquisa de documentação externa e referências de bibliotecas |
+| `@designer` | subagent | Design, revisão e implementação de UI/UX |
 
 ## Skills do Ecossistema
 
 | Skill | Descrição |
 |---|---|
-| `harness-workflow` | Pipeline de 6 estágios do harness (SPEC → PLAN → ANALYZE → BUILD → REVIEW → DOCUMENT) |
-| `project-review` | Revisão de estrutura e arquitetura |
-| `prisma-scaffold` | Scaffold de modelos Prisma |
-| `quality-assurance-analyst` | Validação de qualidade |
-| `documentation-architect` | Documentação técnica |
-| `react-components` | Componentes React com shadcn/ui |
-| `commit-push` | Fluxo de commit, documentação e push |
+| `harness-workflow` | Pipeline de 6 estágios do harness (SPEC → PLAN → ANALYZE → BUILD → REVIEW → DOCUMENT) integrado com SDD |
 | `mem-search` | Consulta de memória persistente com progressive disclosure |
 | `agent-creator` | Meta-agente que cria outros agentes a partir de descrição natural |
-| `testsprite-mcp` | Skill para orquestração do fluxo completo de testes automatizados com TestSprite MCP Server |
-| `auto-discovery` | Escaneia repositório, detecta gaps e gera agentes/skills automaticamente |
-| `notion-agent-copilot` | Acessa a página Agent Copilot no Notion via MCP (busca, leitura, comentários e atualizações) |
-| `spec-driven-dev` | Skill de Spec Driven Development para o ecossistema Nexus |
 | `cbm-agent` | Code intelligence via codebase-memory-mcp knowledge graph (search, trace, architecture) |
-| `google-workspace` | Acessar e manipular Google Workspace (Drive, Docs, Sheets, Gmail) via MCP server local com OAuth 2.0 |
-| `playwright-automation` | Automação de navegador via Playwright MCP — navegar, clicar, preencher, extrair dados |
-| `chrome-devtools` | Debugging frontend via Chrome DevTools MCP — performance, network, console, memory |
+| `project-review` | Revisão de estrutura e arquitetura |
+
+> Skills removidas por redundância: `spec-driven-dev`, `documentation-architect`, `quality-assurance-analyst`, `commit-push`, `playwright-automation`, `chrome-devtools`, `notion-agent-copilot`, `google-workspace`, `testsprite-mcp`. Seus conteúdos foram incorporados aos respectivos agentes ou ao `harness-workflow`.
+>
+> Skills removidas por não-uso: `react-components` (projeto externo), `prisma-scaffold`, `auto-discovery`.
 
 ## Comandos Customizados
 
 | Comando | Descrição |
 |---|---|
-| `/pipeline` | Inicia o pipeline harness para uma tarefa |
+| `/super-pipeline` | Pipeline completo com delegação automática a sub-agents especializados por estágio |
 | `/spec-gen` | Gera spec formal .spec.md em docs/spec/ (Spec Driven Development) |
 | `/spec-review` | Revisa spec com @spec-reviewer (delega ao spec-reviewer) |
 | `/cbm-query` | Consulta o knowledge graph CBM (delega ao @cbm-agent) |
-| `/review-doc` | Revisa documentação contra código |
-| `/create-component` | Cria componentes UI |
 | `/plan` | Planeja feature usando pipeline harness (delega ao orchestrator) |
 | `/security` | Auditoria de segurança (delega ao @security-secret-auditor) |
 | `/qa` | Testes e qualidade (delega ao @quality-assurance-analyst) |
@@ -78,15 +73,24 @@ O Nexus usa um **harness de 6 estágios** (SPEC → PLAN → ANALYZE → BUILD �
 | `/memory` | Consulta memória persistente do harness |
 | `/criar-agente` | Cria novo agente para o ecossistema Nexus (delega ao orchestrator) |
 | `/commit-&-docs` | Commit + atualização de documentação |
+| `/gw` | Operações no Google Workspace (delega ao @google-workspace-agent) |
 | `/playwright` | Automação de navegador via Playwright MCP (delega ao @playwright-agent) |
 | `/devtools` | Debugging frontend via Chrome DevTools MCP (delega ao @chrome-devtools-agent) |
+| `/job-search` | Busca vagas (delega ao @job-apply-agent) |
+| `/job-analyze` | Analisa match score (delega ao @job-apply-agent) |
+| `/job-consolidate` | Consolida currículos (delega ao @job-apply-agent) |
+| `/job-adapt` | Gera currículo adaptado (delega ao @job-apply-agent) |
+| `/job-apply` | Executa aplicação (delega ao @job-apply-agent) |
+| `/job-track` | Atualiza status de candidaturas (delega ao @job-apply-agent) |
+
+> Comandos removidos: `/pipeline` (obsoleto — use `/super-pipeline`), `/create-component` (projeto externo), `/review-doc` (sobrepõe `/docs`).
 
 ## Custom Tools (Layer 2)
 
 | Tool | Descrição |
 |---|---|
 | `nexus-log` | Log estruturado para `.opencode/logs/`. Níveis: info, warn, error, debug, trace |
-| `nexus-memory` | Persistência de contexto entre sessões em `.opencode/memory/`. Ações: save, load, list, delete, search |
+| `nexus-memory` | Persistência de contexto entre sessões em `.opencode/memory/`. Ações: save, load, list, delete, search. **Dual-mode:** custom tool (uso direto pelo agente) + MCP server (para clientes MCP externos) |
 | `nexus-handoff` | Handoff entre agentes/sessões em `.opencode/memory/handoffs/`. Ações: create, apply, list |
 | `spec-validator` | Valida documentos de spec (.spec.md) contra o JSON schema Nexus |
 
@@ -96,7 +100,7 @@ O Nexus usa um **harness de 6 estágios** (SPEC → PLAN → ANALYZE → BUILD �
 |---|---|
 | `.opencode/logs/` | Logs estruturados do harness (rotacionados por data e categoria) |
 | `.opencode/memory/` | Dados persistentes entre sessões (SQLite + FTS5) |
-| `.opencode/mcp/` | Servidor MCP do Nexus Memory Server |
+| `.opencode/mcp/` | Servidores MCP (Nexus Memory Server, Google Workspace) |
 | `.opencode/dashboard/` | Dashboard web do ecossistema Nexus |
 | `.opencode/memory/handoffs/` | Documentos de handoff para retomada de contexto |
 | `.opencode/tools/` | Ferramentas customizadas do ecossistema |
@@ -106,7 +110,7 @@ O Nexus usa um **harness de 6 estágios** (SPEC → PLAN → ANALYZE → BUILD �
 
 - **Linguagem:** Português para comunicação com o usuário
 - **Commits:** Descritivos e atômicos, usando `/commit-&-docs`
-- **Pipeline:** Sempre iniciar com `/pipeline` para tarefas complexas
+- **Pipeline:** Sempre iniciar com `/super-pipeline` para tarefas complexas
 - **Sub-agents:** Usar `task("descrição", "@agent-name")` para delegação
 - **Logs:** Usar `nexus-log` para registrar eventos importantes
 - **Memória:** Usar `nexus-memory` para salvar/recuperar contexto entre sessões

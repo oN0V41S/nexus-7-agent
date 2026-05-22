@@ -45,28 +45,6 @@ function appendLog(
   fs.appendFileSync(logFile, entry, "utf-8");
 }
 
-function saveMemory(
-  worktree: string,
-  key: string,
-  value: unknown,
-  scope: string,
-  agent: string,
-  sessionID: string,
-): void {
-  const memDir = path.join(worktree, ".opencode/memory");
-  ensureDir(memDir);
-  const entry = {
-    key,
-    scope,
-    value,
-    savedAt: new Date().toISOString(),
-    agent,
-    sessionID,
-  };
-  const filePath = path.join(memDir, `${scope}--${key}.json`);
-  fs.writeFileSync(filePath, JSON.stringify(entry, null, 2), "utf-8");
-}
-
 function saveHandoff(
   worktree: string,
   title: string,
@@ -201,22 +179,22 @@ const NexusPlugin: Plugin = async (ctx) => {
           outputSize: output.output?.length || 0,
         });
 
-        // Auto-observação: salva na memória chamadas de ferramentas relevantes
+        // Auto-observação: registra tool-calls no nexus-log
         const relevantTools = ["write", "edit", "bash", "task", "skill"];
         if (relevantTools.includes(input.tool) && output.title) {
-          saveMemory(
+          appendLog(
             worktree,
-            `tool-${input.callID}`,
+            "INFO",
+            "observations",
+            `Tool: ${input.tool} — ${output.title}`,
             {
-              type: "tool_observation",
               tool: input.tool,
               title: output.title,
               outputSize: output.output?.length || 0,
               sessionID: input.sessionID,
+              agent: input.agent || "plugin",
+              duration,
             },
-            "observations",
-            input.agent || "plugin",
-            input.sessionID,
           );
         }
       }
