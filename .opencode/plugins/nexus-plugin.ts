@@ -162,6 +162,93 @@ const NexusPlugin: Plugin = async (ctx) => {
         sessionID: input.sessionID,
         callID: input.callID,
       });
+
+      // =============================================================
+      // FlexEdit: flexible matching for the edit tool
+      // =============================================================
+      // When the LLM generates oldString with whitespace variations
+      // (CRLF vs LF, tabs vs spaces, trailing whitespace), the native
+      // edit tool fails because content.includes(oldString) returns
+      // false. This interceptor performs flexible regex matching and
+      // corrects the oldString argument so the edit tool finds the exact match.
+      // =============================================================
+
+      if (input.tool === "edit") {
+        const args = input.arguments as { filePath?: string; oldString?: string; newString?: string };
+        const filePathArg = args.filePath;
+        const modelOldString = args.oldString;
+
+        if (filePathArg && modelOldString) {
+          try {
+            const resolvedPath = path.isAbsolute(filePathArg)
+              ? filePathArg
+              : path.join(worktree, filePathArg);
+
+            if (!fs.existsSync(resolvedPath)) {
+              appendLog(worktree, "WARN", "plugin", "FlexEdit: file not found", {
+                filePath: filePathArg,
+                resolvedPath,
+              });
+            } else {
+              const content = fs.readFileSync(resolvedPath, "utf-8");
+
+              // Skip if exact match already exists (no fix needed)
+              if (!content.includes(modelOldString)) {
+                // Skip very short strings (risk of false positives)
+                if (modelOldString.trim().length < 5) {
+                  appendLog(worktree, "WARN", "plugin", "FlexEdit: oldString too short, skipping", {
+                    oldString: modelOldString,
+                    filePath: resolvedPath,
+                  });
+                } else {
+                  // Build flexible regex: split into lines, trim each,
+                  // escape regex specials, allow flexible whitespace.
+                  const lines = modelOldString.split("\n");
+                  const parts = lines
+                    .map((line) => {
+                      const trimmed = line.trim();
+                      if (trimmed === "") return null;
+                      const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                      const flexInternal = escaped.replace(/[ \t]+/g, "[ \\t]*");
+                      return `[ \\t]*${flexInternal}[ \\t]*`;
+                    })
+                    .filter((p): p is string => p !== null);
+
+                  const pattern = parts.join("(?:\\r?\\n)+");
+                  const regex = new RegExp(pattern, "g");
+                  const matches = content.match(regex);
+
+                  if (matches && matches.length === 1) {
+                    const matchedOriginal = matches[0];
+
+                    // Fix the argument so the native edit tool finds the exact match
+                    args.oldString = matchedOriginal;
+
+                    appendLog(worktree, "INFO", "plugin", "FlexEdit: matched and corrected oldString", {
+                      filePath: resolvedPath,
+                      modelLength: modelOldString.length,
+                      matchedLength: matchedOriginal.length,
+                    });
+                  } else if (matches && matches.length > 1) {
+                    appendLog(worktree, "WARN", "plugin", "FlexEdit: multiple matches, aborting", {
+                      count: matches.length,
+                      filePath: resolvedPath,
+                    });
+                  } else {
+                    appendLog(worktree, "WARN", "plugin", "FlexEdit: no matches found", {
+                      filePath: resolvedPath,
+                    });
+                  }
+                }
+              }
+            }
+          } catch (err) {
+            appendLog(worktree, "ERROR", "plugin", `FlexEdit error: ${err instanceof Error ? err.message : String(err)}`, {
+              filePath: filePathArg,
+            });
+          }
+        }
+      }
     },
 
     "tool.execute.after": async (input, output) => {
