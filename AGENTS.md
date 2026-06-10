@@ -115,3 +115,5 @@ O Nexus usa um **harness de 6 estágios** (SPEC → PLAN → ANALYZE → BUILD �
 - **Logs:** Usar `nexus-log` para registrar eventos importantes
 - **Memória:** Usar `nexus-memory` para salvar/recuperar contexto entre sessões
 - **Handoff:** Usar `nexus-handoff` antes de pausar tarefas longas
+- **Backup Protocol:** Antes de sobrescrever arquivos existentes (ex: `data/curriculos_backup/`), avisar o usuário. Usar `git diff` para mostrar mudanças em arquivos versionados. Criar pasta `log/ALTERAÇÃO/` para mudanças em arquivos não versionados.
+- **Finalização:** Perguntar ao usuário quando a tarefa está concluída e apagar os logs ao final da sessão.

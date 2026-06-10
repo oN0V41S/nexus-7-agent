@@ -94,3 +94,121 @@ Agente especializado em automação de navegador via Playwright MCP. Permite int
 - [ ] Salvar screenshots para documentação de testes
 - [ ] Usar `playwright_browser_wait_for` em vez de timeouts fixos
 - [ ] Fechar abas/páginas quando não mais necessárias
+
+## Padrões de Interação Descobertos
+
+### React-Select (Multi-select Dropdowns)
+
+Problema comum: O `.fill()` não dispara o filtro do react-select. Usar `page.keyboard.type()`.
+
+```javascript
+// CORRETO: keyboard typing dispara filtro
+const input = page.locator('input[id^="react-select"]').first();
+await input.focus();
+await input.click({ force: true });
+await sleep(800);
+await page.keyboard.type('Natura Liberado Sim');
+await sleep(2500);
+await page.locator('[id^="react-select-"][id*="-option-"]')
+  .filter({ hasText: 'Natura Liberado Sim' }).first().click({ force: true });
+await sleep(2000);
+
+// ERRADO: fill() não funciona
+await input.fill('Natura Liberado Sim');
+```
+
+Comportamentos importantes:
+- `closeMenuOnSelect: true` — clicar na opção fecha o dropdown automaticamente
+- NÃO pressionar Escape após selecionar — fecha o modal pai!
+- Usar `Alt` para sair do dropdown sem fechar o modal
+- IDs das opções são dinâmicos: `react-select-{N}-option-{M}`
+- Usar `filter({ hasText: '...' })` em vez de confiar em IDs
+
+### Material-UI Dialogs (Modais)
+
+```javascript
+// Abrir modal
+await page.locator('button:has([data-testid="AddRoundedIcon"])').first().click({ force: true });
+
+// Verificar se modal está aberto
+const isOpen = await page.locator('[role="dialog"]').isVisible();
+
+// Conteúdo do modal
+const dialogText = await page.locator('[role="dialog"]').first().evaluate(el => el.textContent);
+
+// Fechar modal
+await page.keyboard.press('Escape'); // funciona se dropdown estiver fechado
+// OU
+await page.locator('button:has-text("Fechar")').click();
+
+// Confirmar
+await page.locator('.MuiButton-containedPrimary').last().click({ force: true });
+```
+
+Cuidados:
+- Escape propaga: se o dropdown já fechou, Escape fecha o modal
+- Modal pode ter múltiplos botões `.MuiButton-containedPrimary` — usar filtro por texto
+- Após confirmar, verificar se modal fechou: `await page.locator('[role="dialog"]').isVisible()`
+
+### Session Management para Automação
+
+```javascript
+// Verificar sessão antes de automatizar
+const { execSync } = require('child_process');
+try {
+  execSync('node .playwright-mcp/visto-login.mjs verify', { stdio: 'pipe' });
+  console.log('Sessão válida');
+} catch {
+  console.log('Sessão expirada — execute visto-login.mjs');
+}
+
+// Usar sessão em scripts
+const context = await browser.newContext({
+  storageState: resolve(__dirname, '.visto-session.json'),
+  viewport: { width: 1920, height: 1080 },
+  locale: 'pt-BR',
+  timezoneId: 'America/Sao_Paulo'
+});
+```
+
+### Padrão de Navegação em Apps SPA
+
+```javascript
+// 1. Navegar
+await page.goto(URL, { waitUntil: 'networkidle', timeout: 30000 });
+await sleep(4000);
+
+// 2. Fechar popups/toasts iniciais
+await page.keyboard.press('Escape');
+await sleep(1000);
+
+// 3. Filtrar
+await page.locator('#FilterId').click({ force: true });
+await sleep(2000);
+await page.locator('text=/OptionText/i').first().click();
+await sleep(3000);
+
+// 4. Abrir item (duplo clique)
+await page.locator('img[alt="filename"]').first().dblclick({ force: true });
+await sleep(5000);
+
+// 5. Navegar em abas
+await page.locator('text=/TabName/i').first().click();
+await sleep(3000);
+```
+
+### Tratamento de Erros com Screenshots
+
+```javascript
+try {
+  // ... automação
+} catch (err) {
+  console.error('ERRO:', err.message);
+  await page.screenshot({
+    path: resolve(__dirname, '.visto-error.png'),
+    type: 'png'
+  }).catch(() => {});
+} finally {
+  await browser.close();
+}
+```
