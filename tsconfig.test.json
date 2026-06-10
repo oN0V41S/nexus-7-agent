@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["jest", "node"],
+    "baseUrl": ".",
+    "noImplicitAny": false,
+    "strictNullChecks": true,
+    "paths": {
+      "@opencode-ai/plugin/tool": ["__mocks__/@opencode-ai/plugin/tool.ts"]
+    }
+  },
+  "include": [
+    ".opencode/**/*.ts",
+    "jest.config.ts",
+    "__mocks__/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

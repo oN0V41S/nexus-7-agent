@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-06-10T18:11:50.036Z",
+  "pipeline": "clonagem-licencas",
+  "imagemOriginal": "PE_Ciclo12-26_1017",
+  "imagemDestino": "PE_Ciclo13-26_1009",
+  "jsonGerado": "/workspaces/nexus-7-agent/data/licencas/licencas-PE_Ciclo12-26_1017-1781114989628.json",
+  "sucesso": false,
+  "status": "FALHA",
+  "totalLicencas": 0,
+  "licencas": []
+}

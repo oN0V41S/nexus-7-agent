@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-06-10T18:04:40.200Z",
+  "pipeline": "clonagem-licencas",
+  "imagemOriginal": "FOT-CST-PER-FEM-ILIA-CICLO-04-2026-120563.jpg",
+  "imagemDestino": "PE_Ciclo04-26_1004.jpg",
+  "jsonGerado": null,
+  "sucesso": false,
+  "status": "FALHA",
+  "totalLicencas": 0,
+  "licencas": []
+}

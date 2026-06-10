@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-06-10T19:33:06.685Z",
+  "pipeline": "clonagem-licencas",
+  "imagemOriginal": "FOT-CST-MAQ-BOC-FACES-CICLO-13-2026-129581",
+  "imagemDestino": "FA_Ciclo13-26_1037",
+  "jsonGerado": "/workspaces/nexus-7-agent/data/licencas/licencas-FOT-CST-MAQ-BOC-FACES-CICLO-13-2026-129581-1781119886315.json",
+  "sucesso": false,
+  "status": "FALHA",
+  "totalLicencas": 0,
+  "licencas": []
+}
