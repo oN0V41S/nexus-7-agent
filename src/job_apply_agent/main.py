@@ -1,10 +1,19 @@
 """
 Job Application Workflow - Entry Point
 
-Orquestra o pipeline completo: busca → análise → consolidação → geração → aplicação → tracking.
+Orquestra o pipeline completo: busca → análise → consolidação → KB → geração → aplicação → tracking.
 
 Uso:
     python -m src.job_apply_agent.main [comando] [args]
+
+Comandos:
+    search      Busca vagas
+    analyze     Calcula match score
+    consolidate Consolida PDFs em DOCX+PDF+KB
+    kb          Gera Knowledge Base .md do candidato
+    adapt       Gera currículo adaptado (DOCX) + carta (TXT)
+    apply       Aplica para vagas
+    track       Gerencia candidaturas
 """
 import sys
 import json
@@ -13,7 +22,7 @@ from pathlib import Path
 # Adiciona src ao path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from src.job_apply_agent.config import load_profile, save_profile, PROFILE_DIR
+from src.job_apply_agent.config import load_profile, save_profile, PROFILE_DIR, PROJECT_DATA_DIR
 
 
 def cmd_search(args: list[str]) -> None:
@@ -57,8 +66,73 @@ def cmd_analyze(args: list[str]) -> None:
     print(f"✅ Análise concluída. Resultados salvos em {output_path}")
 
 
+def cmd_kb(args: list[str]) -> None:
+    """Gera Knowledge Base .md com currículo completo do candidato."""
+    from src.job_apply_agent.consolidator import consolidate_pdfs_to_kb, docx_to_kb
+
+    if not args:
+        print("❌ Informe ao menos 1 arquivo de currículo: /job-kb [arquivo1] [arquivo2] ...")
+        return
+
+    file_paths = [Path(p) for p in args if Path(p).exists()]
+    if not file_paths:
+        print("❌ Nenhum arquivo válido encontrado.")
+        return
+
+    # Separa DOCX de PDFs
+    docx_paths = [p for p in file_paths if p.suffix.lower() == ".docx"]
+    pdf_paths = [p for p in file_paths if p.suffix.lower() == ".pdf"]
+
+    # Suporta flag --output
+    output_dir = PROFILE_DIR / "output"
+    if "--output" in args:
+        idx = args.index("--output")
+        if idx + 1 < len(args):
+            output_dir = Path(args[idx + 1])
+
+    # Suporta flag --json (gera também profile.json)
+    generate_json = "--json" in args
+    generate_docx = "--docx" in args
+
+    if docx_paths:
+        # Processa DOCX via docx_to_kb()
+        for docx_path in docx_paths:
+            print(f"📄 Processando DOCX: {docx_path.name}...")
+            result = docx_to_kb(docx_path, output_dir)
+            kb_path = result.get("kb_path", "")
+            print(f"✅ Knowledge Base gerada: {kb_path}")
+            if generate_json and result.get("profile"):
+                save_profile(result["profile"])
+                print(f"✅ Perfil salvo em {PROFILE_DIR / 'profile.json'}")
+        return
+
+    # Processamento de PDFs (comportamento original)
+    if not pdf_paths:
+        print("❌ Nenhum arquivo .pdf ou .docx válido encontrado.")
+        return
+
+    print(f"📄 Consolidando {len(pdf_paths)} arquivo(s) em Knowledge Base...")
+
+    if generate_json or generate_docx:
+        from src.job_apply_agent.consolidator import consolidate_pdfs_to_docx
+        result = consolidate_pdfs_to_docx(pdf_paths, output_dir / "kb_output")
+        kb_path = result.get("kb_path", "")
+        if generate_json and result.get("profile"):
+            save_profile(result["profile"])
+            print(f"✅ Perfil salvo em {PROFILE_DIR / 'profile.json'}")
+        if generate_docx:
+            print(f"✅ DOCX gerado: {result.get('docx_path')}")
+    else:
+        # Apenas KB (modo limpo)
+        result = consolidate_pdfs_to_kb(pdf_paths, output_dir)
+        kb_path = result.get("kb_path", "")
+
+    print(f"✅ Knowledge Base gerada: {kb_path}")
+    print(f"💡 Use /job-adapt [vaga_id] para criar currículo adaptado a partir desta KB.")
+
+
 def cmd_consolidate(args: list[str]) -> None:
-    """Consolida PDFs em DOCX ATS de 1 página."""
+    """Consolida PDFs em DOCX ATS de 1 página + KB."""
     from src.job_apply_agent.consolidator import consolidate_pdfs_to_docx
 
     if not args:
@@ -83,9 +157,13 @@ def cmd_consolidate(args: list[str]) -> None:
     print(f"✅ DOCX gerado: {result.get('docx_path')}")
     print(f"✅ PDF gerado: {result.get('pdf_path')}")
 
+    # Knowledge Base (nova saída)
+    if result.get("kb_path"):
+        print(f"✅ Knowledge Base gerada: {result.get('kb_path')}")
+
 
 def cmd_adapt(args: list[str]) -> None:
-    """Gera currículo adaptado e carta."""
+    """Gera currículo adaptado (DOCX) e carta (TXT)."""
     from src.job_apply_agent.generator import generate_application
 
     profile = load_profile()
@@ -109,14 +187,15 @@ def cmd_adapt(args: list[str]) -> None:
         print(f"❌ Vaga {job_id} não encontrada.")
         return
 
-    output_dir = PROFILE_DIR / "output" / job_id
+    # Salva em data/job-apply-agent/<vaga_id>/ (regra v1.2.0+)
+    output_dir = PROJECT_DATA_DIR / job_id
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"📝 Gerando materiais para {job.get('title', job_id)}...")
     result = generate_application(profile, job, output_dir)
 
-    print(f"✅ Currículo adaptado: {result.get('resume_path')}")
-    print(f"✅ Carta de apresentação: {result.get('cover_letter_path')}")
+    print(f"✅ Currículo adaptado (DOCX): {result.get('resume_path')}")
+    print(f"✅ Carta de apresentação (TXT): {result.get('cover_letter_path')}")
     print(f"⚠️  Revisão humana necessária antes de aplicar.")
 
 
@@ -133,12 +212,17 @@ def cmd_apply(args: list[str]) -> None:
     is_batch = args[0] == "--batch"
     threshold = int(args[1]) if is_batch and len(args) > 1 else 70
 
+    analyzed_path = PROFILE_DIR / "analyzed_results.json"
+    all_jobs = json.loads(analyzed_path.read_text()) if analyzed_path.exists() else []
+
     if is_batch:
-        analyzed_path = PROFILE_DIR / "analyzed_results.json"
-        jobs = json.loads(analyzed_path.read_text()) if analyzed_path.exists() else []
-        target_jobs = [j for j in jobs if j.get("score", 0) >= threshold]
+        target_jobs = [j for j in all_jobs if j.get("score", 0) >= threshold]
     else:
-        target_jobs = [{"id": job_id}]
+        job = next((j for j in all_jobs if j.get("id") == job_id), None)
+        if not job:
+            print(f"❌ Vaga {job_id} não encontrada nos resultados analisados.")
+            return
+        target_jobs = [job]
 
     for job in target_jobs:
         if check_duplicate(job.get("company", ""), job.get("title", "")):
@@ -194,6 +278,7 @@ def main() -> None:
     commands = {
         "search": cmd_search,
         "analyze": cmd_analyze,
+        "kb": cmd_kb,
         "consolidate": cmd_consolidate,
         "adapt": cmd_adapt,
         "apply": cmd_apply,
@@ -204,7 +289,7 @@ def main() -> None:
         commands[command](args)
     else:
         print(f"❌ Comando desconhecido: {command}")
-        print("Comandos disponíveis: search, analyze, consolidate, adapt, apply, track")
+        print("Comandos disponíveis: search, analyze, consolidate, kb, adapt, apply, track")
 
 
 if __name__ == "__main__":

@@ -82,6 +82,7 @@ O Nexus usa um **harness de 6 estágios** (SPEC → PLAN → ANALYZE → BUILD �
 | `/job-adapt` | Gera currículo adaptado (delega ao @job-apply-agent) |
 | `/job-apply` | Executa aplicação (delega ao @job-apply-agent) |
 | `/job-track` | Atualiza status de candidaturas (delega ao @job-apply-agent) |
+| `/job-kb [pdfs]` | Gera Knowledge Base .md completa do currículo (base para currículos adaptados) |
 
 > Comandos removidos: `/pipeline` (obsoleto — use `/super-pipeline`), `/create-component` (projeto externo), `/review-doc` (sobrepõe `/docs`).
 

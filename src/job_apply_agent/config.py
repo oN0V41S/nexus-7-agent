@@ -10,6 +10,10 @@ HOME = Path.home()
 PROFILE_DIR = HOME / ".job-apply-agent"
 PROFILE_DIR.mkdir(parents=True, exist_ok=True)
 
+# Diretório de dados do projeto (onde ficam KB, currículos adaptados, etc.)
+PROJECT_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "job-apply-agent"
+PROJECT_DATA_DIR.mkdir(parents=True, exist_ok=True)
+
 # Arquivos de estado
 PROFILE_JSON = PROFILE_DIR / "profile.json"
 APPLIED_LOG = PROFILE_DIR / "applied.jsonl"

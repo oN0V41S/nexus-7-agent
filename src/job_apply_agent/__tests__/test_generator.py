@@ -9,12 +9,12 @@ from src.job_apply_agent import generator
 class TestGenerator:
     """Testes para geração contextualizada de currículo e carta."""
 
-    def test_generate_adapted_resume_returns_path(self, tmp_path):
-        """Verifica que generate_adapted_resume retorna Path."""
+    def test_generate_adapted_resume_returns_dict(self, tmp_path):
+        """Verifica que generate_adapted_resume retorna dict com docx_path e md_path."""
         profile = {
             "name": "João Silva",
             "skills": ["React", "Node"],
-            "experience": "Desenvolvedor Full Stack",
+            "experience": "Desenvolvedor Full Stack na Empresa X (2020 - 2022): React, Node",
         }
         job = {
             "title": "Desenvolvedor React",
@@ -24,8 +24,13 @@ class TestGenerator:
             "gaps": ["Node"],
         }
         result = generator.generate_adapted_resume(profile, job, tmp_path)
-        assert isinstance(result, Path)
-        assert result.name == "resume_adapted.pdf"
+        assert isinstance(result, dict)
+        assert "docx_path" in result
+        assert "md_path" in result
+        assert Path(result["docx_path"]).exists()
+        assert Path(result["docx_path"]).suffix == ".docx"
+        assert Path(result["md_path"]).exists()
+        assert Path(result["md_path"]).suffix == ".md"
 
     def test_generate_cover_letter_returns_path(self, tmp_path):
         """Verifica que generate_cover_letter retorna Path."""
@@ -44,7 +49,7 @@ class TestGenerator:
         }
         result = generator.generate_cover_letter(profile, job, tmp_path)
         assert isinstance(result, Path)
-        assert result.name == "cover_letter.pdf"
+        assert result.name == "cover_letter.txt"
 
     def test_generate_application_returns_dict(self, tmp_path):
         """Verifica que generate_application retorna dict."""

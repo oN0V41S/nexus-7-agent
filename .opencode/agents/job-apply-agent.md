@@ -14,6 +14,7 @@ Agente central do pipeline de Job Application Workflow. Consome ferramentas MCP 
 - **Busca Multi-plataforma:** LinkedIn (Chrome MCP), Glassdoor/Indeed/Monster (Playwright MCP)
 - **Análise de Compatibilidade:** Match score via Ollama + heurística
 - **Consolidação de Currículos:** Multi-PDF → DOCX ATS de 1 página
+- **Knowledge Base:** Multi-PDF → .md completo (fonte de verdade para currículos adaptados)
 - **Geração Contextualizada:** Currículo adaptado + carta de apresentação (fpdf2)
 - **Aplicação Semiautomática:** Revisão humana + submissão via MCPs
 - **Desduplicação e Rastreamento:** Notion/JSONL + histórico
@@ -25,6 +26,7 @@ Agente central do pipeline de Job Application Workflow. Consome ferramentas MCP 
 - `/job-adapt [vaga_id]`: Gera currículo adaptado + carta
 - `/job-apply [vaga_id]`: Executa aplicação com aprovação humana
 - `/job-track`: Atualiza status no Notion
+- `/job-kb [pdfs]`: Consolida currículos em Knowledge Base .md completa
 
 ## Skills Consumidas
 - Chrome DevTools MCP (autenticação/sessão)
@@ -57,6 +59,7 @@ cd /workspaces/nexus-7-agent && PYTHONPATH=src python -m src.job_apply_agent [co
 | `/job-adapt [id]` | `python3 run_job_agent.py adapt [id]` |
 | `/job-apply [id]` | `python3 run_job_agent.py apply [id]` |
 | `/job-track [ação]` | `python3 run_job_agent.py track [ação]` |
+| `/job-kb [pdfs]` | `python3 run_job_agent.py kb [pdfs]` |
 
 ### Pacote Python
 ```bash

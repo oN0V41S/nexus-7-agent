@@ -364,6 +364,12 @@
       "agent": "job-apply-agent",
       "subtask": true
     },
+    "job-kb": {
+      "description": "Gera Knowledge Base .md completa do currículo do candidato a partir de PDFs",
+      "template": "{file:.opencode/skills/job-apply-agent/commands/kb.md}\n\n$ARGUMENTS",
+      "agent": "job-apply-agent",
+      "subtask": true
+    },
     "playwright": {
       "description": "Automação de navegador via Playwright MCP",
       "template": "Use o agente @playwright-agent para automação de navegador via Playwright MCP.\n\n$ARGUMENTS\n\nTarefas comuns: navegar para URL, clicar em elementos, preencher formulários, extrair dados de páginas, tirar screenshots, testar fluxos de UI.",
