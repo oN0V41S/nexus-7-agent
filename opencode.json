@@ -16,8 +16,9 @@
   "default_agent": "orchestrator",
   "agent": {
     "orchestrator": {
-      "description": "Orquestrador Nexus - gerencia o pipeline harness de 5 estágios",
+      "description": "Orquestrador Nexus - gerencia o pipeline harness de 6 estágios",
       "mode": "primary",
+      "model": "gemini-2.5-pro",
       "temperature": 0.1,
       "maxSteps": 50,
       "tools": {
@@ -43,6 +44,7 @@
     "security-secret-auditor": {
       "description": "Auditoria de segurança no código",
       "mode": "subagent",
+      "model": "deepseek-v4-flash-free",
       "temperature": 0.1,
       "permission": {
         "edit": "deny",
@@ -53,6 +55,7 @@
     "quality-assurance-analyst": {
       "description": "Testes e validação de qualidade",
       "mode": "subagent",
+      "model": "deepseek-v4-flash-free",
       "temperature": 0.1,
       "permission": {
         "write": "allow",
@@ -63,6 +66,7 @@
     "docs-architect": {
       "description": "Documentação técnica",
       "mode": "subagent",
+      "model": "deepseek-v4-flash-free",
       "temperature": 0.2,
       "permission": {
         "write": "allow",
@@ -73,6 +77,7 @@
     "testsprite-mcp-agent": {
       "description": "Integração e orquestração do TestSprite MCP Server para testes automatizados de UI e API",
       "mode": "subagent",
+      "model": "deepseek-v4-flash-free",
       "temperature": 0.1,
       "tools": {
         "read": true,
@@ -97,6 +102,7 @@
     "cbm-agent": {
       "description": "Code intelligence via codebase-memory-mcp knowledge graph (14 tools)",
       "mode": "subagent",
+      "model": "deepseek-v4-flash-free",
       "temperature": 0.1,
       "permission": {
         "bash": "allow",
@@ -107,6 +113,7 @@
     "notion-agent": {
       "description": "Especialista em gerenciar conteúdo no Notion via MCP",
       "mode": "subagent",
+      "model": "deepseek-v4-flash-free",
       "temperature": 0.1,
       "permission": {
         "read": "allow",
@@ -118,6 +125,7 @@
     "job-apply-agent": {
       "description": "Agente principal do Job Application Workflow - busca, análise, consolidação, geração e aplicação de vagas",
       "mode": "primary",
+      "model": "gemini-2.5-pro",
       "temperature": 0.1,
       "maxSteps": 100,
       "tools": {
@@ -143,6 +151,7 @@
     "playwright-agent": {
       "description": "Automação de navegador via Playwright MCP — navegar, clicar, preencher formulários, extrair dados, testar UI",
       "mode": "subagent",
+      "model": "deepseek-v4-flash-free",
       "temperature": 0.1,
       "permission": {
         "read": "allow",
@@ -154,6 +163,7 @@
     "chrome-devtools-agent": {
       "description": "Debugging frontend via Chrome DevTools MCP — performance, network, console, memory, accessibility",
       "mode": "subagent",
+      "model": "deepseek-v4-flash-free",
       "temperature": 0.1,
       "permission": {
         "read": "allow",
@@ -165,6 +175,7 @@
     "oracle": {
       "description": "Strategic advisor for architecture, code review, and complex debugging",
       "mode": "subagent",
+      "model": "deepseek-v4-flash-free",
       "temperature": 0.1,
       "permission": {
         "read": "allow",
@@ -176,6 +187,7 @@
     "explorer": {
       "description": "Fast codebase search and pattern matching",
       "mode": "subagent",
+      "model": "deepseek-v4-flash-free",
       "temperature": 0.1,
       "permission": {
         "read": "allow",
@@ -187,6 +199,7 @@
     "fixer": {
       "description": "Fast implementation specialist for well-defined tasks",
       "mode": "subagent",
+      "model": "deepseek-v4-flash-free",
       "temperature": 0.1,
       "permission": {
         "read": "allow",
@@ -198,6 +211,7 @@
     "librarian": {
       "description": "External documentation and library research specialist",
       "mode": "subagent",
+      "model": "deepseek-v4-flash-free",
       "temperature": 0.1,
       "tools": {
         "read": true,
@@ -216,6 +230,7 @@
     "designer": {
       "description": "UI/UX design, review and implementation",
       "mode": "subagent",
+      "model": "deepseek-v4-flash-free",
       "temperature": 0.1,
       "permission": {
         "read": "allow",
@@ -227,6 +242,7 @@
     "spec-reviewer": {
       "description": "Spec review for completeness, consistency and testability",
       "mode": "subagent",
+      "model": "deepseek-v4-flash-free",
       "temperature": 0.1,
       "permission": {
         "read": "allow",
@@ -238,6 +254,7 @@
     "google-workspace-agent": {
       "description": "Google Workspace specialist — Drive, Docs, Sheets, Gmail",
       "mode": "subagent",
+      "model": "deepseek-v4-flash-free",
       "temperature": 0.1,
       "permission": {
         "read": "allow",
@@ -249,6 +266,7 @@
     "councillor": {
       "description": "Read-only council advisor for independent analysis",
       "mode": "subagent",
+      "model": "deepseek-v4-flash-free",
       "temperature": 0.1,
       "permission": {
         "read": "allow",
@@ -260,6 +278,7 @@
     "observer": {
       "description": "Read-only observer for monitoring and analysis",
       "mode": "subagent",
+      "model": "deepseek-v4-flash-free",
       "temperature": 0.1,
       "permission": {
         "read": "allow",
