@@ -18,6 +18,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { createDb, type SqliteDb } from "../tools/sqlite-adapter";
+import { getMongoAdapter, type MongoAdapter } from "../tools/mongodb-adapter";
 
 // ============================================================
 // Config
@@ -174,6 +175,54 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
 ];
 
 // ============================================================
+// Handoff Tool Definitions
+// ============================================================
+
+const HANDOFF_TOOL_DEFINITIONS: ToolDefinition[] = [
+  {
+    name: "nexus_handoff_save",
+    description: "Save a handoff document locally and optionally to MongoDB",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Unique handoff ID" },
+        title: { type: "string", description: "Handoff title" },
+        summary: { type: "string", description: "Summary of work done" },
+        nextSteps: { type: "array", items: { type: "string" }, description: "Next steps" },
+        artifacts: { type: "array", items: { type: "string" }, description: "Generated artifacts" },
+        pending: { type: "string", description: "Pending decisions" },
+        fromAgent: { type: "string", description: "Source agent" },
+        fromSession: { type: "string", description: "Source session ID" },
+        type: { type: "string", enum: ["manual", "auto"], default: "manual" },
+      },
+      required: ["id", "title", "summary"],
+    },
+  },
+  {
+    name: "nexus_handoff_load",
+    description: "Load a handoff by ID (checks local first, then MongoDB)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Handoff ID to load" },
+      },
+      required: ["id"],
+    },
+  },
+  {
+    name: "nexus_handoff_list",
+    description: "List recent handoffs (merges local and remote)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: { type: "number", default: 10, description: "Max handoffs to return" },
+        source: { type: "string", enum: ["local", "remote", "all"], default: "all" },
+      },
+    },
+  },
+];
+
+// ============================================================
 // MCP Protocol (JSON-RPC over stdio)
 // ============================================================
 
@@ -271,7 +320,144 @@ const handlers: Record<string, (params: any) => any> = {
     const result = database.prepare("DELETE FROM memories WHERE key = ? AND scope = ?").run(key, scope);
     return { status: result.changes > 0 ? "deleted" : "not_found", key, scope };
   },
+
+  nexus_handoff_save: (params) => {
+    const { id, title, summary, nextSteps = [], artifacts = [], pending = "None", fromAgent, fromSession, type = "manual" } = params;
+    if (!id) throw new Error("id is required");
+    if (!title) throw new Error("title is required");
+    if (!summary) throw new Error("summary is required");
+
+    const handoff = {
+      id,
+      title,
+      summary,
+      nextSteps,
+      artifacts,
+      pending,
+      fromAgent: fromAgent || "unknown",
+      fromSession: fromSession || null,
+      type,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Save locally
+    const localPath = path.join(process.cwd(), ".opencode/memory/handoffs", `${id}.json`);
+    const dir = path.dirname(localPath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(localPath, JSON.stringify(handoff, null, 2), "utf-8");
+
+    // Save to MongoDB if configured
+    let remote = false;
+    if (mongoAdapter && mongoAdapter.isConnected()) {
+      try {
+        mongoAdapter.insertOne("handoffs", handoff);
+        remote = true;
+      } catch (err) {
+        console.error("[MCP] MongoDB handoff save failed:", err);
+      }
+    }
+
+    return { status: "saved", id, local: true, remote };
+  },
+
+  nexus_handoff_load: (params) => {
+    const { id } = params;
+    if (!id) throw new Error("id is required");
+
+    // Try local first
+    const localPath = path.join(process.cwd(), ".opencode/memory/handoffs", `${id}.json`);
+    if (fs.existsSync(localPath)) {
+      const content = JSON.parse(fs.readFileSync(localPath, "utf-8"));
+      return { status: "loaded", handoff: content, source: "local" };
+    }
+
+    // Try MongoDB
+    if (mongoAdapter && mongoAdapter.isConnected()) {
+      try {
+        const doc = mongoAdapter.findOne("handoffs", { id });
+        if (doc) {
+          return { status: "loaded", handoff: doc, source: "remote" };
+        }
+      } catch (err) {
+        console.error("[MCP] MongoDB handoff load failed:", err);
+      }
+    }
+
+    return { status: "not_found", id };
+  },
+
+  nexus_handoff_list: (params) => {
+    const { limit = 10, source = "all" } = params;
+
+    const handoffs: any[] = [];
+
+    // Local handoffs
+    if (source === "all" || source === "local") {
+      const hfDir = path.join(process.cwd(), ".opencode/memory/handoffs");
+      if (fs.existsSync(hfDir)) {
+        const files = fs.readdirSync(hfDir).filter(f => f.endsWith(".json"));
+        for (const file of files.slice(0, limit)) {
+          try {
+            const content = JSON.parse(fs.readFileSync(path.join(hfDir, file), "utf-8"));
+            handoffs.push({ ...content, _source: "local" });
+          } catch { /* skip */ }
+        }
+      }
+    }
+
+    // MongoDB handoffs
+    if ((source === "all" || source === "remote") && mongoAdapter && mongoAdapter.isConnected()) {
+      try {
+        const remoteHandoffs = mongoAdapter.find("handoffs", {}, { limit, sort: { createdAt: -1 } });
+        handoffs.push(...remoteHandoffs.map(h => ({ ...h, _source: "remote" })));
+      } catch (err) {
+        console.error("[MCP] MongoDB handoff list failed:", err);
+      }
+    }
+
+    // Deduplicate by ID (local takes precedence)
+    const seen = new Set<string>();
+    const unique = handoffs.filter(h => {
+      if (seen.has(h.id)) return false;
+      seen.add(h.id);
+      return true;
+    });
+
+    // Sort by createdAt descending
+    unique.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return {
+      status: "listed",
+      count: Math.min(unique.length, limit),
+      entries: unique.slice(0, limit),
+    };
+  },
 };
+
+// ============================================================
+// MongoDB (optional)
+// ============================================================
+
+let mongoAdapter: MongoAdapter | null = null;
+
+async function initMongo(): Promise<void> {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    console.log("[MCP] MONGODB_URI not set, running in local-only mode");
+    return;
+  }
+
+  try {
+    mongoAdapter = await getMongoAdapter();
+    console.log("[MCP] Connected to MongoDB:", uri.replace(/\/\/[^:]+:[^@]+@/, "//***:***@"));
+  } catch (err) {
+    console.error("[MCP] MongoDB connection failed, falling back to local-only:", err);
+    mongoAdapter = null;
+  }
+}
+
+// Call during startup
+initMongo().catch(console.error);
 
 // ============================================================
 // MCP Lifecycle
@@ -317,7 +503,7 @@ process.stdin.on("data", (chunk: Buffer) => {
         jsonrpc: "2.0",
         id: request.id,
         result: {
-          tools: TOOL_DEFINITIONS,
+          tools: [...TOOL_DEFINITIONS, ...HANDOFF_TOOL_DEFINITIONS],
         },
       });
       continue;
