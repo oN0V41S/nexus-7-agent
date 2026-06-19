@@ -217,3 +217,150 @@ describe("MongoDB Adapter (live)", () => {
     });
   });
 });
+
+// ============================================================
+// Test 4: CRUD operation integration tests
+// ============================================================
+describe("MongoDB Adapter CRUD", () => {
+  let adapter: MongoAdapter;
+  let mongoAvailable = false;
+  const TEST_COLLECTION = "test-handoffs";
+
+  beforeAll(async () => {
+    mongoAvailable = await isMongoAvailable();
+  }, 10000);
+
+  beforeEach(async () => {
+    if (!mongoAvailable) return;
+    const uri = process.env.MONGODB_URI || "mongodb://localhost:27017/nexus-test";
+    adapter = await createMongoAdapter(uri);
+    await adapter.deleteMany(TEST_COLLECTION, {});
+  });
+
+  afterEach(async () => {
+    if (!mongoAvailable) return;
+    if (adapter?.isConnected()) {
+      await adapter.deleteMany(TEST_COLLECTION, {});
+      await adapter.close();
+    }
+  });
+
+  it("should insert and retrieve a document", async () => {
+    if (!mongoAvailable) {
+      console.warn("Skipping: MongoDB not available");
+      return;
+    }
+
+    // Arrange
+    const doc = { id: "test-1", title: "Test Handoff", createdAt: new Date() };
+
+    // Act
+    const insertedId = await adapter.insertOne(TEST_COLLECTION, doc);
+    const found = await adapter.findOne(TEST_COLLECTION, { id: "test-1" });
+
+    // Assert
+    expect(insertedId).toBeDefined();
+    expect(found).toBeDefined();
+    expect(found?.title).toBe("Test Handoff");
+  });
+
+  it("should insert multiple documents", async () => {
+    if (!mongoAvailable) {
+      console.warn("Skipping: MongoDB not available");
+      return;
+    }
+
+    // Arrange
+    const docs = [
+      { id: "multi-1", title: "First" },
+      { id: "multi-2", title: "Second" },
+      { id: "multi-3", title: "Third" },
+    ];
+
+    // Act
+    const ids = await adapter.insertMany(TEST_COLLECTION, docs);
+    const count = await adapter.countDocuments(TEST_COLLECTION);
+
+    // Assert
+    expect(ids).toHaveLength(3);
+    expect(count).toBe(3);
+  });
+
+  it("should find documents with filter and limit", async () => {
+    if (!mongoAvailable) {
+      console.warn("Skipping: MongoDB not available");
+      return;
+    }
+
+    // Arrange
+    await adapter.insertMany(TEST_COLLECTION, [
+      { id: "find-1", type: "handoff", createdAt: new Date("2026-01-01") },
+      { id: "find-2", type: "session", createdAt: new Date("2026-01-02") },
+      { id: "find-3", type: "handoff", createdAt: new Date("2026-01-03") },
+    ]);
+
+    // Act
+    const results = await adapter.find(TEST_COLLECTION, { type: "handoff" }, {
+      limit: 2,
+      sort: { createdAt: -1 },
+    });
+
+    // Assert
+    expect(results).toHaveLength(2);
+    expect(results[0].id).toBe("find-3"); // Most recent first
+  });
+
+  it("should update a document", async () => {
+    if (!mongoAvailable) {
+      console.warn("Skipping: MongoDB not available");
+      return;
+    }
+
+    // Arrange
+    await adapter.insertOne(TEST_COLLECTION, { id: "update-1", status: "pending" });
+
+    // Act — updateOne requires MongoDB update operators ($set, $inc, etc.)
+    const updated = await adapter.updateOne(
+      TEST_COLLECTION,
+      { id: "update-1" },
+      { $set: { status: "completed" } },
+    );
+    const found = await adapter.findOne(TEST_COLLECTION, { id: "update-1" });
+
+    // Assert
+    expect(updated).toBe(true);
+    expect(found?.status).toBe("completed");
+  });
+
+  it("should delete a document", async () => {
+    if (!mongoAvailable) {
+      console.warn("Skipping: MongoDB not available");
+      return;
+    }
+
+    // Arrange
+    await adapter.insertOne(TEST_COLLECTION, { id: "delete-1" });
+
+    // Act
+    const deleted = await adapter.deleteOne(TEST_COLLECTION, { id: "delete-1" });
+    const found = await adapter.findOne(TEST_COLLECTION, { id: "delete-1" });
+
+    // Assert
+    expect(deleted).toBe(true);
+    expect(found).toBeNull();
+  });
+
+  it("should perform health check", async () => {
+    if (!mongoAvailable) {
+      console.warn("Skipping: MongoDB not available");
+      return;
+    }
+
+    // Act
+    const health = await adapter.healthCheck();
+
+    // Assert
+    expect(health.connected).toBe(true);
+    expect(health.database).toBeDefined();
+  });
+});
