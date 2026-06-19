@@ -95,6 +95,55 @@ O Nexus usa um **harness de 6 estágios** (SPEC → PLAN → ANALYZE → BUILD �
 | `nexus-handoff` | Handoff entre agentes/sessões em `.opencode/memory/handoffs/`. Ações: create, apply, list |
 | `spec-validator` | Valida documentos de spec (.spec.md) contra o JSON schema Nexus |
 
+## MongoDB Remote Sync (Optional)
+
+O ecossistema Nexus suporta sincronização remota via MongoDB para compartilhar handoffs e sessões entre instâncias/máquinas.
+
+### Configuração
+
+Adicione a variável de ambiente:
+
+```bash
+# .env
+MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/nexus-memory
+```
+
+### Como funciona
+
+| Dado | Local | Remoto (MongoDB) | Comportamento |
+|------|-------|------------------|---------------|
+| **Handoffs** | `.opencode/memory/handoffs/` | Collection `handoffs` | Dual-write (local + remoto) |
+| **Sessions** | SQLite `memories` table | Collection `sessions` | Dual-write (local + remoto) |
+| **Memory** | SQLite `memories` table | Não sincronizado | Local apenas |
+
+### MCP Tools
+
+| Tool | Descrição | Storage |
+|------|-----------|--------|
+| `nexus_handoff_save` | Salva handoff | Local + MongoDB (se configurado) |
+| `nexus_handoff_load` | Carrega handoff | Local primeiro, depois MongoDB |
+| `nexus_handoff_list` | Lista handoffs | Merge de local + MongoDB |
+| `nexus_session_save` | Salva resumo de sessão | Local + MongoDB (se configurado) |
+| `nexus_session_search` | Busca sessões | Busca em ambos |
+
+### Uso
+
+```typescript
+// Salvar handoff com sync remoto
+nexus-handoff action=create title="Feature X" summary="..." syncToMongo=true
+
+// Listar handoffs de todas as fontes
+nexus-handoff action=list source=all
+
+// Buscar sessões remotas
+nexus_session_search query="MongoDB" limit=10
+```
+
+### Fallback
+
+Se MongoDB não estiver configurado ou indisponível, todas as operações funcionam normalmente em modo local.
+
+
 ## Diretórios de Dados
 
 | Diretório | Propósito |

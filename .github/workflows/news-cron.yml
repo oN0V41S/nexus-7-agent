@@ -1,0 +1,38 @@
+name: 📰 News Cron — Notícias Personalizadas
+
+on:
+  schedule:
+    # 06:06 BRT (UTC-3) = 09:06 UTC
+    - cron: '6 9 * * *'
+  workflow_dispatch:
+    # Permite execução manual para testes
+
+concurrency:
+  group: news-cron
+  cancel-in-progress: false
+
+jobs:
+  fetch-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run news cron
+        run: npx tsx scripts/news-cron.ts
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
