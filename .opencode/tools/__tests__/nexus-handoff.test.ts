@@ -397,3 +397,111 @@ describe("nexus-handoff other operations", () => {
     ).rejects.toThrow("Ação desconhecida");
   });
 });
+
+// ============================================================
+// Test 6: Remote sync option (with mocked MongoDB)
+// ============================================================
+
+// Mock the mongodb-adapter module
+jest.mock("../mongodb-adapter", () => {
+  const mockAdapter = {
+    isConnected: jest.fn().mockReturnValue(true),
+    insertOne: jest.fn().mockResolvedValue({ toString: () => "mock-id" }),
+    findOne: jest.fn().mockResolvedValue(null),
+    find: jest.fn().mockResolvedValue([]),
+    close: jest.fn(),
+  };
+
+  return {
+    getMongoAdapter: jest.fn().mockResolvedValue(mockAdapter),
+    __mockAdapter: mockAdapter,
+  };
+});
+
+describe("nexus-handoff with remote sync", () => {
+  let mockAdapter: any;
+
+  beforeEach(async () => {
+    const mod = await import("../mongodb-adapter");
+    mockAdapter = (mod as any).__mockAdapter;
+    mockAdapter.insertOne.mockClear();
+    mockAdapter.find.mockClear();
+    mockAdapter.findOne.mockClear();
+    process.env.MONGODB_URI = "mongodb://localhost:27017/test";
+  });
+
+  afterEach(() => {
+    delete process.env.MONGODB_URI;
+  });
+
+  it("should save handoff with syncToMongo option", async () => {
+    // Arrange
+    const ctx = createContext();
+
+    // Act
+    const result = await nexusHandoffTool.execute(
+      {
+        action: "create",
+        title: "Remote Sync Test",
+        summary: "Testing remote sync",
+        nextSteps: JSON.stringify(["step1"]),
+        artifacts: JSON.stringify([]),
+        pending: "None",
+        syncToMongo: "true",
+      },
+      ctx,
+    );
+
+    // Assert
+    const parsed = JSON.parse(result);
+    expect(parsed.status).toBe("created");
+    expect(parsed).toHaveProperty("localId");
+    expect(parsed.remoteSynced).toBe(true);
+    expect(mockAdapter.insertOne).toHaveBeenCalledWith("handoffs", expect.objectContaining({ title: "Remote Sync Test" }));
+  });
+
+  it("should list handoffs from both local and remote", async () => {
+    // Arrange
+    const ctx = createContext();
+
+    // Act
+    const result = await nexusHandoffTool.execute(
+      {
+        action: "list",
+        source: "all",
+      },
+      ctx,
+    );
+
+    // Assert
+    const parsed = JSON.parse(result);
+    expect(parsed.status).toBe("listed");
+    expect(parsed).toHaveProperty("localCount");
+    expect(parsed).toHaveProperty("remoteCount");
+  });
+
+  it("should fallback to local when syncToMongo fails", async () => {
+    // Arrange
+    const ctx = createContext();
+    mockAdapter.isConnected.mockReturnValueOnce(false);
+
+    // Act
+    const result = await nexusHandoffTool.execute(
+      {
+        action: "create",
+        title: "Fallback Test",
+        summary: "Testing fallback",
+        nextSteps: JSON.stringify([]),
+        artifacts: JSON.stringify([]),
+        pending: "None",
+        syncToMongo: "true",
+      },
+      ctx,
+    );
+
+    // Assert
+    const parsed = JSON.parse(result);
+    expect(parsed.status).toBe("created");
+    expect(parsed.remoteSynced).toBe(false);
+  });
+});

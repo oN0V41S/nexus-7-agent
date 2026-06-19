@@ -67,9 +67,17 @@ export default tool({
       .string()
       .optional()
       .describe("ID do handoff para apply (usado em apply)"),
+    syncToMongo: tool.schema
+      .string()
+      .optional()
+      .describe("Sincronizar com MongoDB remoto: 'true' para sync, 'false' para local only"),
+    source: tool.schema
+      .string()
+      .optional()
+      .describe("Fonte para list: 'local', 'remote', 'all' (default: 'all')"),
   },
   async execute(args, context) {
-    const { action, title, summary, nextSteps, artifacts, pending, handoffId } = args;
+    const { action, title, summary, nextSteps, artifacts, pending, handoffId, syncToMongo, source } = args;
     const hfDir = ensureHandoffDir(context.worktree);
 
     switch (action) {
@@ -89,12 +97,30 @@ export default tool({
           fromSession: context.sessionID,
         };
 
+        // Save locally
         const filePath = path.join(hfDir, `${id}.json`);
         fs.writeFileSync(filePath, JSON.stringify(doc, null, 2), "utf-8");
+
+        // Save to MongoDB if requested
+        let remoteSynced = false;
+        if (syncToMongo === "true" && process.env.MONGODB_URI) {
+          try {
+            const { getMongoAdapter } = await import("./mongodb-adapter");
+            const adapter = await getMongoAdapter();
+            if (adapter && adapter.isConnected()) {
+              await adapter.insertOne("handoffs", doc);
+              remoteSynced = true;
+            }
+          } catch (err) {
+            console.error("[Handoff] MongoDB sync failed:", err);
+          }
+        }
 
         return JSON.stringify({
           status: "created",
           id,
+          localId: id,
+          remoteSynced,
           instructions: `Para retomar: use nexus-handoff com action=apply e handoffId=${id}`,
           handoff: doc,
         });
@@ -103,40 +129,99 @@ export default tool({
       case "apply": {
         if (!handoffId) throw new Error("handoffId é obrigatório para action=apply");
 
+        // Try local first
         const filePath = path.join(hfDir, `${handoffId}.json`);
-        if (!fs.existsSync(filePath)) {
+        if (fs.existsSync(filePath)) {
+          const content = JSON.parse(fs.readFileSync(filePath, "utf-8"));
           return JSON.stringify({
-            status: "not_found",
-            handoffId,
-            message: "Handoff não encontrado. Use list para ver IDs disponíveis.",
+            status: "applied",
+            handoff: content,
+            source: "local",
+            context: `Retomando: ${content.title}\n\nResumo: ${content.summary}\n\nPróximos passos: ${content.nextSteps.join(", ")}\n\nPendências: ${content.pending}`,
           });
         }
 
-        const content = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+        // Try MongoDB
+        if (process.env.MONGODB_URI) {
+          try {
+            const { getMongoAdapter } = await import("./mongodb-adapter");
+            const adapter = await getMongoAdapter();
+            if (adapter && adapter.isConnected()) {
+              const doc = await adapter.findOne("handoffs", { id: handoffId });
+              if (doc) {
+                return JSON.stringify({
+                  status: "applied",
+                  handoff: doc,
+                  source: "remote",
+                  context: `Retomando: ${doc.title}\n\nResumo: ${doc.summary}`,
+                });
+              }
+            }
+          } catch (err) {
+            console.error("[Handoff] MongoDB load failed:", err);
+          }
+        }
+
         return JSON.stringify({
-          status: "applied",
-          handoff: content,
-          context: `Retomando: ${content.title}\n\nResumo: ${content.summary}\n\nPróximos passos: ${content.nextSteps.join(", ")}\n\nPendências: ${content.pending}`,
+          status: "not_found",
+          handoffId,
+          message: "Handoff não encontrado. Use list para ver IDs disponíveis.",
         });
       }
 
       case "list": {
-        const files = fs.readdirSync(hfDir).filter((f) => f.endsWith(".json"));
-        const handoffs = files.map((f) => {
-          const c = JSON.parse(fs.readFileSync(path.join(hfDir, f), "utf-8"));
-          return {
-            id: c.id,
-            title: c.title,
-            createdAt: c.createdAt,
-            fromAgent: c.fromAgent,
-            summary: c.summary.slice(0, 100) + (c.summary.length > 100 ? "..." : ""),
-          };
+        const handoffs: any[] = [];
+        let localCount = 0;
+        let remoteCount = 0;
+
+        // Local handoffs
+        if (source !== "remote") {
+          const files = fs.readdirSync(hfDir).filter((f) => f.endsWith(".json"));
+          for (const file of files) {
+            try {
+              const c = JSON.parse(fs.readFileSync(path.join(hfDir, file), "utf-8"));
+              handoffs.push({ ...c, _source: "local" });
+              localCount++;
+            } catch { /* skip */ }
+          }
+        }
+
+        // MongoDB handoffs
+        if (source !== "local" && process.env.MONGODB_URI) {
+          try {
+            const { getMongoAdapter } = await import("./mongodb-adapter");
+            const adapter = await getMongoAdapter();
+            if (adapter && adapter.isConnected()) {
+              const remoteHandoffs = await adapter.find("handoffs", {}, { limit: 50, sort: { createdAt: -1 } });
+              handoffs.push(...remoteHandoffs.map(h => ({ ...h, _source: "remote" })));
+              remoteCount = remoteHandoffs.length;
+            }
+          } catch (err) {
+            console.error("[Handoff] MongoDB list failed:", err);
+          }
+        }
+
+        // Deduplicate
+        const seen = new Set<string>();
+        const unique = handoffs.filter(h => {
+          if (seen.has(h.id)) return false;
+          seen.add(h.id);
+          return true;
         });
 
         return JSON.stringify({
           status: "listed",
-          count: handoffs.length,
-          handoffs,
+          count: unique.length,
+          localCount,
+          remoteCount,
+          handoffs: unique.map(h => ({
+            id: h.id,
+            title: h.title,
+            createdAt: h.createdAt,
+            fromAgent: h.fromAgent,
+            source: h._source,
+            summary: h.summary?.slice(0, 100) + (h.summary?.length > 100 ? "..." : ""),
+          })),
         });
       }
 
