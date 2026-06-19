@@ -360,6 +360,78 @@ def _parse_education_entries(edu_text: str) -> list[dict]:
     return entries
 
 
+
+
+# ─── Fallback inteligente para resumo adaptado ─────────────────────────────────
+
+
+def _build_smart_summary(profile: dict, job: dict) -> str:
+    """
+    Gera resumo profissional adaptado à vaga sem Ollama.
+
+    Usa gaps/strengths da análise heurística para enfatizar skills relevantes.
+    Retorna string com resumo contextualizado.
+    """
+    base_summary = profile.get("summary", "")
+    strengths = job.get("strengths", [])
+    gaps = job.get("gaps", [])
+    job_title = job.get("title", "")
+
+    # Se não há strengths específicos, retorna o summary original
+    if not strengths:
+        return base_summary
+
+    # Constrói adapted_summary: adiciona ênfase nas strengths
+    strengths_text = ", ".join(s.title() for s in strengths[:4])
+
+    # Identifica o "foco" da vaga a partir do título
+    focus_areas = {
+        "infraestrutura": "infraestrutura de TI",
+        "suporte": "suporte e infraestrutura",
+        "dados": "análise de dados",
+        "data": "análise de dados",
+        "engenheiro de dados": "engenharia de dados",
+        "bi": "business intelligence",
+        "analytics": "business intelligence e analytics",
+        "devops": "infraestrutura e automação DevOps",
+        "devsecops": "segurança e automação DevOps",
+        "java": "desenvolvimento backend Java",
+        "frontend": "desenvolvimento frontend",
+        "full stack": "desenvolvimento full stack",
+        "ia": "inteligência artificial aplicada",
+        "machine learning": "machine learning",
+        "segurança": "segurança da informação",
+        "cyber": "cibersegurança",
+    }
+
+    focus = ""
+    title_lower = job_title.lower()
+    for keyword, area in focus_areas.items():
+        if keyword in title_lower:
+            focus = area
+            break
+
+    if focus:
+        adapted = (
+            f"{profile.get('name', 'Profissional')} com experiência em {focus}. "
+            f"Principais competências: {strengths_text}. "
+        )
+        # Adiciona a formação se disponível
+        edu = profile.get("education", "")
+        if edu:
+            edu_short = edu.split(".")[0].strip() if "." in edu else edu[:60]
+            adapted += f"Formação em {edu_short}. "
+        # Adiciona o summary original como complemento se não for redundante
+        if base_summary and not any(s.lower() in base_summary.lower() for s in strengths):
+            adapted += base_summary
+        return adapted.strip()
+
+    # Fallback: se não achou foco, usa base_summary + strengths
+    if base_summary:
+        return f"{base_summary} Destaque em: {strengths_text}."
+    return f"Profissional de TI com experiência em {strengths_text}."
+
+
 # ─── Geração Markdown do currículo ───────────────────────────────────────────
 
 
@@ -393,7 +465,8 @@ def _build_resume_markdown(profile: dict, job: dict) -> str:
                 _build_ollama_prompt("resume_summary", profile, job)
             )
             if not summary:
-                summary = profile.get("summary", "")
+                # Fallback inteligente: usa _build_smart_summary
+                summary = _build_smart_summary(profile, job)
             if summary:
                 lines.append(summary)
             lines.append("")
@@ -413,8 +486,40 @@ def _build_resume_markdown(profile: dict, job: dict) -> str:
 
         # ── Experiência Profissional ──────────────────────────────────────
         elif key == "experience":
+            # PRIORIDADE: usar experience_raw (com bullets preservados)
+            exp_raw = profile.get("experience_raw", "")
             exp_text = profile.get("experience", "")
-            if exp_text:
+
+            if exp_raw and "•" in exp_raw:
+                # Parse do formato raw com bullets
+                lines.append(f"## {sec['name']}")
+                blocks = exp_raw.strip().split("\n\n")
+                for block in blocks:
+                    block = block.strip()
+                    if not block:
+                        continue
+                    lines_in_block = block.split("\n")
+                    # Primeira linha = cabeçalho da experiência
+                    header = lines_in_block[0].strip()
+                    if header:
+                        m = re.match(
+                            r"^(.+?)\s+(?:na|no|em|–|-)\s+(.+?)\s*\(([^)]+)\)\s*$",
+                            header, re.UNICODE,
+                        )
+                        if m:
+                            lines.append(
+                                f"### **{m.group(1).strip()}** | {m.group(2).strip()} | {m.group(3).strip()}"
+                            )
+                        else:
+                            lines.append(f"### {header}")
+                    # Demais linhas = bullets
+                    for detail_line in lines_in_block[1:]:
+                        detail_line = detail_line.strip().lstrip("•- \t")
+                        if detail_line:
+                            lines.append(f"- {detail_line}")
+                lines.append("")
+            elif exp_text:
+                # Fallback: usa o texto normalizado
                 lines.append(f"## {sec['name']}")
                 entries = _parse_experience_entries(exp_text)
                 for entry in entries:
@@ -689,6 +794,13 @@ def generate_adapted_resume(profile: dict, job: dict, output_dir: Path) -> dict:
     """
     md_text = _build_resume_markdown(profile, job)
 
+    # Valida completude
+    warnings = validate_resume_completeness(md_text, profile)
+    if warnings:
+        logger.warning("⚠️ Currículo pode estar incompleto:")
+        for w in warnings:
+            logger.warning(f"   - {w}")
+
     # Salva Markdown
     md_path = output_dir / "resume_adapted.md"
     md_path.write_text(md_text, encoding="utf-8")
@@ -777,3 +889,47 @@ def generate_application(profile: dict, job: dict, output_dir: Path) -> dict:
         "resume_md": str(resume_result["md_path"]),
         "cover_letter_path": str(letter_path),
     }
+
+# ─── Validação de completude ──────────────────────────────────────────────────
+
+
+def validate_resume_completeness(md_text: str, profile: dict) -> list[str]:
+    """
+    Verifica se o currículo gerado contém todos os campos do perfil.
+
+    Returns:
+        Lista de warnings (vazia se completo).
+    """
+    warnings_list = []
+
+    # Skills
+    for skill in profile.get("skills", []):
+        if skill not in md_text:
+            warnings_list.append(f"Skill ausente: {skill}")
+            break  # Uma skill ausente já é indicativo suficiente
+
+    # Projetos
+    for proj in profile.get("projects", []):
+        if isinstance(proj, dict) and proj.get("name", "") not in md_text:
+            warnings_list.append(f"Projeto ausente: {proj.get('name')}")
+
+    # Certificações
+    for cert in profile.get("certifications", []):
+        if isinstance(cert, str) and cert.split("|")[0].strip() not in md_text:
+            warnings_list.append(f"Certificação ausente: {cert[:40]}")
+
+    # Idiomas
+    langs = profile.get("languages", "")
+    if langs and not any(lang.strip() in md_text for lang in langs.split(",")):
+        warnings_list.append("Idiomas não encontrados no currículo")
+
+    # Experience_raw vs md
+    exp_raw = profile.get("experience_raw", "")
+    if exp_raw and len(exp_raw) > 50:
+        # Verifica se pelo menos 3 palavras significativas do raw aparecem
+        words = set(re.findall(r'\b[A-Z][a-z]{3,}\b', exp_raw[:500]))
+        matched = sum(1 for w in words if w.lower() in md_text.lower())
+        if matched < max(3, len(words) // 3):
+            warnings_list.append(f"Conteúdo de experiência parece incompleto ({matched}/{len(words)} termos)")
+
+    return warnings_list
