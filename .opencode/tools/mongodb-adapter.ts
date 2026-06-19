@@ -22,9 +22,32 @@ export interface MongoAdapterOptions {
   maxPoolSize?: number;
 }
 
+/**
+ * Flexible document type for MongoDB operations.
+ * Uses `unknown` for type safety while remaining permissive enough
+ * for diverse document shapes. Callers can narrow types as needed.
+ */
 export interface MongoDocument {
   _id?: ObjectId;
-  [key: string]: any;
+  [key: string]: unknown;
+}
+
+/**
+ * Custom error class for MongoDB adapter operations.
+ * Wraps driver errors with consistent shape and collection context.
+ */
+export class MongoAdapterError extends Error {
+  readonly operation: string;
+  readonly collection: string;
+  readonly cause?: Error;
+
+  constructor(operation: string, collection: string, message: string, cause?: Error) {
+    super(`[${operation}] ${collection}: ${message}`);
+    this.name = "MongoAdapterError";
+    this.operation = operation;
+    this.collection = collection;
+    this.cause = cause;
+  }
 }
 
 export interface MongoAdapter {
@@ -36,11 +59,16 @@ export interface MongoAdapter {
   insertMany(collection: string, docs: MongoDocument[]): Promise<ObjectId[]>;
   findOne(collection: string, filter: Record<string, any>): Promise<MongoDocument | null>;
   find(collection: string, filter: Record<string, any>, options?: { limit?: number; sort?: Record<string, 1 | -1> }): Promise<MongoDocument[]>;
+  /**
+   * Update a single document. The `update` parameter accepts the full
+   * MongoDB update document (e.g. { $set: { ... } }, { $inc: { ... } }).
+   * Passing a raw document without operators will cause a MongoDB error.
+   */
   updateOne(collection: string, filter: Record<string, any>, update: Record<string, any>): Promise<boolean>;
   deleteOne(collection: string, filter: Record<string, any>): Promise<boolean>;
   deleteMany(collection: string, filter: Record<string, any>): Promise<number>;
   countDocuments(collection: string, filter?: Record<string, any>): Promise<number>;
-  healthCheck(): Promise<{ connected: boolean; database: string; collections: string[] }>;
+  healthCheck(): Promise<{ connected: boolean; database: string }>;
 }
 
 // ============================================================
@@ -79,52 +107,84 @@ export async function createMongoAdapter(
     getCollection: (name: string) => db.collection(name),
 
     insertOne: async (collection, doc) => {
-      const result = await db.collection(collection).insertOne(doc);
-      return result.insertedId;
+      try {
+        const result = await db.collection(collection).insertOne(doc);
+        return result.insertedId;
+      } catch (err) {
+        throw new MongoAdapterError("insertOne", collection, String(err), err as Error);
+      }
     },
 
     insertMany: async (collection, docs) => {
-      const result = await db.collection(collection).insertMany(docs);
-      return Object.values(result.insertedIds);
+      try {
+        const result = await db.collection(collection).insertMany(docs);
+        return Object.values(result.insertedIds);
+      } catch (err) {
+        throw new MongoAdapterError("insertMany", collection, String(err), err as Error);
+      }
     },
 
     findOne: async (collection, filter) => {
-      return await db.collection(collection).findOne(filter);
+      try {
+        return await db.collection(collection).findOne(filter);
+      } catch (err) {
+        throw new MongoAdapterError("findOne", collection, String(err), err as Error);
+      }
     },
 
     find: async (collection, filter, options = {}) => {
-      let cursor = db.collection(collection).find(filter);
-      if (options.sort) cursor = cursor.sort(options.sort);
-      if (options.limit) cursor = cursor.limit(options.limit);
-      return await cursor.toArray();
+      try {
+        let cursor = db.collection(collection).find(filter);
+        if (options.sort) cursor = cursor.sort(options.sort);
+        if (options.limit) cursor = cursor.limit(options.limit);
+        return await cursor.toArray();
+      } catch (err) {
+        throw new MongoAdapterError("find", collection, String(err), err as Error);
+      }
     },
 
     updateOne: async (collection, filter, update) => {
-      const result = await db.collection(collection).updateOne(filter, { $set: update });
-      return result.modifiedCount > 0;
+      try {
+        const result = await db.collection(collection).updateOne(filter, update);
+        return result.modifiedCount > 0;
+      } catch (err) {
+        throw new MongoAdapterError("updateOne", collection, String(err), err as Error);
+      }
     },
 
     deleteOne: async (collection, filter) => {
-      const result = await db.collection(collection).deleteOne(filter);
-      return result.deletedCount > 0;
+      try {
+        const result = await db.collection(collection).deleteOne(filter);
+        return result.deletedCount > 0;
+      } catch (err) {
+        throw new MongoAdapterError("deleteOne", collection, String(err), err as Error);
+      }
     },
 
     deleteMany: async (collection, filter) => {
-      const result = await db.collection(collection).deleteMany(filter);
-      return result.deletedCount;
+      try {
+        const result = await db.collection(collection).deleteMany(filter);
+        return result.deletedCount;
+      } catch (err) {
+        throw new MongoAdapterError("deleteMany", collection, String(err), err as Error);
+      }
     },
 
     countDocuments: async (collection, filter = {}) => {
-      return await db.collection(collection).countDocuments(filter);
+      try {
+        return await db.collection(collection).countDocuments(filter);
+      } catch (err) {
+        throw new MongoAdapterError("countDocuments", collection, String(err), err as Error);
+      }
     },
 
     healthCheck: async () => {
-      const collections = await db.listCollections().toArray();
-      return {
-        connected,
-        database: db.databaseName,
-        collections: collections.map(c => c.name),
-      };
+      try {
+        await db.admin().ping();
+        return { connected, database: db.databaseName };
+      } catch (err) {
+        return { connected: false, database: db.databaseName };
+      }
     },
   };
 }
@@ -138,7 +198,7 @@ function extractDbName(uri: string): string {
   // mongodb://user:pass@host:port/dbname?options
   try {
     const url = new URL(uri);
-    const dbName = url.pathname.replace("/", "").split("?")[0];
+    const dbName = url.pathname.replace(/^\//, "").split("?")[0];
     return dbName || "nexus-memory";
   } catch {
     return "nexus-memory";
