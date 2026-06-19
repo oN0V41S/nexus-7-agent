@@ -13,6 +13,11 @@
  * - nexus_memory_search  → Busca textual com FTS5
  * - nexus_memory_list    → Lista entradas recentes
  * - nexus_memory_delete  → Remove entrada
+ * - nexus_handoff_save   → Salva handoff localmente e opcionalmente no MongoDB
+ * - nexus_handoff_load   → Carrega handoff por ID
+ * - nexus_handoff_list   → Lista handoffs recentes
+ * - nexus_session_save   → Salva resumo de sessão localmente e opcionalmente no MongoDB
+ * - nexus_session_search → Busca sessões por conteúdo
  */
 
 import * as fs from "node:fs";
@@ -218,6 +223,44 @@ const HANDOFF_TOOL_DEFINITIONS: ToolDefinition[] = [
         limit: { type: "number", default: 10, description: "Max handoffs to return" },
         source: { type: "string", enum: ["local", "remote", "all"], default: "all" },
       },
+    },
+  },
+];
+
+// ============================================================
+// Session Tool Definitions
+// ============================================================
+
+const SESSION_TOOL_DEFINITIONS: ToolDefinition[] = [
+  {
+    name: "nexus_session_save",
+    description: "Save session summary locally and optionally to MongoDB",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sessionId: { type: "string", description: "Unique session ID" },
+        summary: { type: "string", description: "Session summary" },
+        agent: { type: "string", description: "Agent name" },
+        messageCount: { type: "number", description: "Total messages" },
+        toolCallCount: { type: "number", description: "Total tool calls" },
+        duration: { type: "number", description: "Duration in ms" },
+        tokensUsed: { type: "number", description: "Tokens consumed" },
+        metadata: { type: "object", description: "Additional metadata" },
+      },
+      required: ["sessionId", "summary"],
+    },
+  },
+  {
+    name: "nexus_session_search",
+    description: "Search sessions by summary content",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Search term" },
+        limit: { type: "number", default: 10 },
+        agent: { type: "string", description: "Filter by agent" },
+      },
+      required: ["query"],
     },
   },
 ];
@@ -432,6 +475,105 @@ const handlers: Record<string, (params: any) => any> = {
       entries: unique.slice(0, limit),
     };
   },
+
+  nexus_session_save: (params) => {
+    const { sessionId, summary, agent, messageCount, toolCallCount, duration, tokensUsed, metadata } = params;
+    if (!sessionId) throw new Error("sessionId is required");
+    if (!summary) throw new Error("summary is required");
+
+    const session = {
+      sessionId,
+      summary,
+      agent: agent || "unknown",
+      messageCount: messageCount || 0,
+      toolCallCount: toolCallCount || 0,
+      duration: duration || 0,
+      tokensUsed: tokensUsed || 0,
+      metadata: metadata || {},
+      savedAt: new Date().toISOString(),
+    };
+
+    // Save to memories table with session scope
+    const database = getDb();
+    database
+      .prepare(
+        `INSERT OR REPLACE INTO memories (key, scope, value, agent, sessionID, savedAt)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(`session:${sessionId}`, "sessions", JSON.stringify(session), agent || "unknown", sessionId, session.savedAt);
+
+    // Save to MongoDB if configured
+    let remote = false;
+    if (mongoAdapter && mongoAdapter.isConnected()) {
+      try {
+        mongoAdapter.insertOne("sessions", session);
+        remote = true;
+      } catch (err) {
+        console.error("[MCP] MongoDB session save failed:", err);
+      }
+    }
+
+    return { status: "saved", sessionId, local: true, remote };
+  },
+
+  nexus_session_search: (params) => {
+    const { query, limit = 10, agent } = params;
+    if (!query) throw new Error("query is required");
+
+    const results: any[] = [];
+
+    // Local search (FTS5)
+    const sanitized = query
+      .replace(/['"]/g, "")
+      .split(/\s+/)
+      .map((w: string) => `"${w}"*`)
+      .join(" AND ");
+
+    try {
+      const database = getDb();
+      const localResults = database
+        .prepare(
+          `SELECT m.key, m.scope, m.value, m.agent, m.savedAt, rank as score
+           FROM memories_fts f JOIN memories m ON m.rowid = f.rowid
+           WHERE memories_fts MATCH ? AND m.scope = 'sessions'
+           ORDER BY rank LIMIT ?`,
+        )
+        .all(sanitized, limit);
+
+      results.push(...localResults.map((r: any) => ({
+        ...JSON.parse(r.value),
+        _source: "local",
+        _score: r.score,
+      })));
+    } catch { /* FTS may fail on malformed queries */ }
+
+    // MongoDB search
+    if (mongoAdapter && mongoAdapter.isConnected()) {
+      try {
+        const filter: Record<string, any> = { summary: { $regex: query, $options: "i" } };
+        if (agent) filter.agent = agent;
+        const remoteResults = mongoAdapter.find("sessions", filter, { limit });
+        results.push(...remoteResults.map((r: any) => ({ ...r, _source: "remote" })));
+      } catch (err) {
+        console.error("[MCP] MongoDB session search failed:", err);
+      }
+    }
+
+    // Deduplicate
+    const seen = new Set<string>();
+    const unique = results.filter(r => {
+      if (seen.has(r.sessionId)) return false;
+      seen.add(r.sessionId);
+      return true;
+    });
+
+    return {
+      status: "searched",
+      query,
+      count: unique.length,
+      results: unique.slice(0, limit),
+    };
+  },
 };
 
 // ============================================================
@@ -503,7 +645,7 @@ process.stdin.on("data", (chunk: Buffer) => {
         jsonrpc: "2.0",
         id: request.id,
         result: {
-          tools: [...TOOL_DEFINITIONS, ...HANDOFF_TOOL_DEFINITIONS],
+          tools: [...TOOL_DEFINITIONS, ...HANDOFF_TOOL_DEFINITIONS, ...SESSION_TOOL_DEFINITIONS],
         },
       });
       continue;

@@ -135,6 +135,40 @@ const HANDOFF_TOOL_DEFINITIONS: ToolDefinition[] = [
   },
 ];
 
+const SESSION_TOOL_DEFINITIONS: ToolDefinition[] = [
+  {
+    name: "nexus_session_save",
+    description: "Save session summary locally and optionally to MongoDB",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sessionId: { type: "string", description: "Unique session ID" },
+        summary: { type: "string", description: "Session summary" },
+        agent: { type: "string", description: "Agent name" },
+        messageCount: { type: "number", description: "Total messages" },
+        toolCallCount: { type: "number", description: "Total tool calls" },
+        duration: { type: "number", description: "Duration in ms" },
+        tokensUsed: { type: "number", description: "Tokens consumed" },
+        metadata: { type: "object", description: "Additional metadata" },
+      },
+      required: ["sessionId", "summary"],
+    },
+  },
+  {
+    name: "nexus_session_search",
+    description: "Search sessions by summary content",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Search term" },
+        limit: { type: "number", default: 10 },
+        agent: { type: "string", description: "Filter by agent" },
+      },
+      required: ["query"],
+    },
+  },
+];
+
 // ============================================================
 // Handler factory (mirrored from server)
 // ============================================================
@@ -317,6 +351,99 @@ function createHandlers(db: SqliteDb, mongoAdapter: MongoAdapterMock | null = nu
         entries: unique.slice(0, limit),
       };
     },
+
+    nexus_session_save: (params: any) => {
+      const { sessionId, summary, agent, messageCount, toolCallCount, duration, tokensUsed, metadata } = params;
+      if (!sessionId) throw new Error("sessionId is required");
+      if (!summary) throw new Error("summary is required");
+
+      const session = {
+        sessionId,
+        summary,
+        agent: agent || "unknown",
+        messageCount: messageCount || 0,
+        toolCallCount: toolCallCount || 0,
+        duration: duration || 0,
+        tokensUsed: tokensUsed || 0,
+        metadata: metadata || {},
+        savedAt: new Date().toISOString(),
+      };
+
+      // Save to memories table with session scope
+      db.prepare(
+        `INSERT OR REPLACE INTO memories (key, scope, value, agent, sessionID, savedAt)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      ).run(`session:${sessionId}`, "sessions", JSON.stringify(session), agent || "unknown", sessionId, session.savedAt);
+
+      // Save to MongoDB if configured
+      let remote = false;
+      if (mongoAdapter && mongoAdapter.isConnected()) {
+        try {
+          mongoAdapter.insertOne("sessions", session);
+          remote = true;
+        } catch (err) {
+          console.error("[MCP] MongoDB session save failed:", err);
+        }
+      }
+
+      return { status: "saved", sessionId, local: true, remote };
+    },
+
+    nexus_session_search: (params: any) => {
+      const { query, limit = 10, agent } = params;
+      if (!query) throw new Error("query is required");
+
+      const results: any[] = [];
+
+      // Local search (FTS5)
+      const sanitized = query
+        .replace(/['"]/g, "")
+        .split(/\s+/)
+        .map((w: string) => `"${w}"*`)
+        .join(" AND ");
+
+      try {
+        const localResults = db.prepare(
+          `SELECT m.key, m.scope, m.value, m.agent, m.savedAt, rank as score
+           FROM memories_fts f JOIN memories m ON m.rowid = f.rowid
+           WHERE memories_fts MATCH ? AND m.scope = 'sessions'
+           ORDER BY rank LIMIT ?`,
+        ).all(sanitized, limit);
+
+        results.push(...localResults.map((r: any) => ({
+          ...JSON.parse(r.value),
+          _source: "local",
+          _score: r.score,
+        })));
+      } catch { /* FTS may fail on malformed queries */ }
+
+      // MongoDB search
+      if (mongoAdapter && mongoAdapter.isConnected()) {
+        try {
+          const filter: Record<string, any> = { summary: { $regex: query, $options: "i" } };
+          if (agent) filter.agent = agent;
+          const remoteResults = mongoAdapter.find("sessions", filter, { limit });
+          results.push(...remoteResults.map((r: any) => ({ ...r, _source: "remote" })));
+        } catch (err) {
+          console.error("[MCP] MongoDB session search failed:", err);
+        }
+      }
+
+      // Deduplicate
+      const seen = new Set<string>();
+      const unique = results.filter((r: any) => {
+        if (seen.has(r.sessionId)) return false;
+        seen.add(r.sessionId);
+        return true;
+      });
+
+      return {
+        status: "searched",
+        query,
+        count: unique.length,
+        results: unique.slice(0, limit),
+      };
+    },
   };
 }
 
@@ -347,7 +474,7 @@ function createToolListResponse(id: string | number): JsonRpcResponse {
   return {
     jsonrpc: "2.0",
     id,
-    result: { tools: [...TOOL_DEFINITIONS, ...HANDOFF_TOOL_DEFINITIONS] },
+    result: { tools: [...TOOL_DEFINITIONS, ...HANDOFF_TOOL_DEFINITIONS, ...SESSION_TOOL_DEFINITIONS] },
   };
 }
 
@@ -453,12 +580,12 @@ describe("MCP Initialize", () => {
 // Test 2: Tools/List
 // ============================================================
 describe("MCP tools/list", () => {
-  it("should return 5 tool definitions", () => {
+  it("should return 10 tool definitions (5 memory + 3 handoff + 2 session)", () => {
     // Arrange & Act
     const response = createToolListResponse("req-1");
 
     // Assert
-    expect(response.result.tools).toHaveLength(8) // 5 memory + 3 handoff;
+    expect(response.result.tools).toHaveLength(10);
   });
 
   it("should have nexus_memory_save with required key and value", () => {
@@ -894,7 +1021,7 @@ describe("MCP handoff tools", () => {
     const response = createToolListResponse("req-handoff");
 
     // Assert
-    expect(response.result.tools).toHaveLength(8);
+    expect(response.result.tools).toHaveLength(10);
   });
 
   it("should have nexus_handoff_save with required fields", () => {
@@ -1094,5 +1221,130 @@ describe("handler - nexus_handoff_list", () => {
         expect.objectContaining({ id: "remote-1" }),
       ]),
     );
+  });
+});
+
+// ============================================================
+// Test 11: Session tools
+// ============================================================
+
+describe("MCP session tools", () => {
+  it("should return 10 tool definitions (5 memory + 3 handoff + 2 session)", () => {
+    const response = createToolListResponse("req-session");
+    expect(response.result.tools).toHaveLength(10);
+  });
+
+  it("should have nexus_session_save with required fields", () => {
+    const response = createToolListResponse(1);
+    const saveTool = response.result.tools.find((t: ToolDefinition) => t.name === "nexus_session_save");
+    expect(saveTool).toBeDefined();
+    expect(saveTool.inputSchema.required).toContain("sessionId");
+    expect(saveTool.inputSchema.required).toContain("summary");
+  });
+
+  it("should have nexus_session_search with required query", () => {
+    const response = createToolListResponse(1);
+    const searchTool = response.result.tools.find((t: ToolDefinition) => t.name === "nexus_session_search");
+    expect(searchTool).toBeDefined();
+    expect(searchTool.inputSchema.required).toContain("query");
+  });
+});
+
+describe("handler - nexus_session_save", () => {
+  it("should save session summary locally", () => {
+    // Arrange
+    const db = setupTestDb();
+    const handlers = createHandlers(db, null);
+
+    // Act
+    const result = handlers.nexus_session_save({
+      sessionId: "session-001",
+      summary: "Completed feature X with 5 tool calls",
+      agent: "orchestrator",
+      messageCount: 25,
+      toolCallCount: 5,
+      duration: 120000,
+      tokensUsed: 15000,
+    });
+
+    // Assert
+    expect(result.status).toBe("saved");
+    expect(result.sessionId).toBe("session-001");
+    expect(result.remote).toBe(false);
+  });
+
+  it("should save session to MongoDB when configured", async () => {
+    // Arrange
+    const db = setupTestDb();
+    const mockMongo: MongoAdapterMock = {
+      insertOne: jest.fn().mockResolvedValue({}),
+      findOne: jest.fn(),
+      find: jest.fn(),
+      isConnected: () => true,
+    };
+    const handlers = createHandlers(db, mockMongo);
+
+    // Act
+    const result = handlers.nexus_session_save({
+      sessionId: "session-remote-001",
+      summary: "Remote session",
+      agent: "orchestrator",
+    });
+
+    // Assert
+    expect(result.status).toBe("saved");
+    expect(result.remote).toBe(true);
+    expect(mockMongo.insertOne).toHaveBeenCalledWith(
+      "sessions",
+      expect.objectContaining({ sessionId: "session-remote-001" }),
+    );
+  });
+});
+
+describe("handler - nexus_session_search", () => {
+  it("should search sessions locally", () => {
+    // Arrange
+    const db = setupTestDb();
+    const handlers = createHandlers(db, null);
+
+    handlers.nexus_session_save({
+      sessionId: "search-1",
+      summary: "Implemented MongoDB adapter",
+      agent: "orchestrator",
+    });
+
+    // Act
+    const result = handlers.nexus_session_search({ query: "MongoDB", limit: 10 });
+
+    // Assert
+    expect(result.status).toBe("searched");
+    expect(result.results).toBeDefined();
+  });
+
+  it("should merge local and remote search results", async () => {
+    // Arrange
+    const db = setupTestDb();
+    const mockMongo: MongoAdapterMock = {
+      insertOne: jest.fn(),
+      findOne: jest.fn(),
+      find: jest.fn().mockReturnValue([
+        { sessionId: "remote-search", summary: "Remote MongoDB work", agent: "fixer" },
+      ]),
+      isConnected: () => true,
+    };
+    const handlers = createHandlers(db, mockMongo);
+
+    handlers.nexus_session_save({
+      sessionId: "local-search",
+      summary: "Local MongoDB work",
+      agent: "explorer",
+    });
+
+    // Act
+    const result = handlers.nexus_session_search({ query: "MongoDB", limit: 10 });
+
+    // Assert
+    expect(result.status).toBe("searched");
+    expect(result.count).toBe(2);
   });
 });
