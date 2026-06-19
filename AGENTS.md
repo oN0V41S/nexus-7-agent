@@ -118,3 +118,25 @@ O Nexus usa um **harness de 6 estágios** (SPEC → PLAN → ANALYZE → BUILD �
 - **Handoff:** Usar `nexus-handoff` antes de pausar tarefas longas
 - **Backup Protocol:** Antes de sobrescrever arquivos existentes (ex: `data/curriculos_backup/`), avisar o usuário. Usar `git diff` para mostrar mudanças em arquivos versionados. Criar pasta `log/ALTERAÇÃO/` para mudanças em arquivos não versionados.
 - **Finalização:** Perguntar ao usuário quando a tarefa está concluída e apagar os logs ao final da sessão.
+
+## OpenSRE (Recém-Instalado)
+
+| Componente | Localização | Função |
+|---|---|---|
+| **Configuração** | `.opencode/opensre/config.yaml` | Configuração do OpenSRE para o projeto |
+| **Alertas** | `.opencode/opensre/alerts/` | Templates de alerta para investigação (generic, datadog) |
+| **Scripts** | `.opencode/opensre/scripts/` | Scripts de integração Nexus ↔ OpenSRE |
+| **Skill** | `.opencode/skills/opensre-skill/SKILL.md` | Skill para uso do OpenSRE no pipeline Nexus |
+
+### Comandos OpenSRE
+
+| Comando | Descrição |
+|---|---|
+| `opensre investigate -i <alert.json>` | Executa investigação RCA a partir de arquivo de alerta |
+| `opensre investigate --interactive` | Modo interativo para colar payload de alerta |
+| `opensre investigate --service <nome>` | Investiga serviço remoto por nome |
+| `opensre health` | Verifica status das integrações configuradas |
+| `opensre doctor` | Diagnóstico completo do ambiente |
+| `opensre tests synthetic` | Executa benchmark RCA sintético (RDS PostgreSQL) |
+| `opensre integrations setup <serviço>` | Configura integração (datadog, grafana, slack, etc.) |
+| `opensre integrations verify` | Verifica conectividade das integrações |

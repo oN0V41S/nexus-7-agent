@@ -1,7 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "autoupdate": true,
-
   "provider": {
     "opencode": {
       "options": {
@@ -14,7 +13,6 @@
       }
     }
   },
-
   "default_agent": "orchestrator",
   "agent": {
     "orchestrator": {
@@ -271,16 +269,13 @@
       }
     }
   },
-
   "instructions": [
     "AGENTS.md"
   ],
-
   "plugin": [
     ".opencode/plugins/nexus-plugin.ts",
     "superpowers@git+https://github.com/obra/superpowers.git"
   ],
-
   "command": {
     "super-pipeline": {
       "description": "Pipeline harness aprimorado: delega cada estágio (SPEC→PLAN→ANALYZE→BUILD→REVIEW→DOCUMENT) a sub-agents especializados com paralelização",
@@ -381,9 +376,14 @@
       "template": "Use o agente @chrome-devtools-agent para debugging frontend via Chrome DevTools MCP.\n\n$ARGUMENTS\n\nTarefas comuns: analisar performance, inspecionar network requests, ler console logs, verificar accessibility, capturar screenshots, debugar memory leaks.",
       "agent": "chrome-devtools-agent",
       "subtask": true
+    },
+    "opensre": {
+      "description": "Investigação de incidentes com OpenSRE (RCA automatizada)",
+      "template": "{file:.opencode/commands/opensre.md}\n\n$ARGUMENTS",
+      "agent": "orchestrator",
+      "subtask": true
     }
   },
-
   "permission": {
     "glob": "allow",
     "grep": "allow",
@@ -399,11 +399,14 @@
     "nexus-memory": "allow",
     "nexus-handoff": "allow"
   },
-
   "mcp": {
     "notion": {
       "type": "local",
-      "command": ["npx", "-y", "@notionhq/notion-mcp-server"],
+      "command": [
+        "npx",
+        "-y",
+        "@notionhq/notion-mcp-server"
+      ],
       "environment": {
         "NOTION_TOKEN": "{env:NOTION_TOKEN}"
       },
@@ -411,27 +414,54 @@
     },
     "playwright": {
       "type": "local",
-      "command": ["npx", "-y", "@playwright/mcp@latest"],
+      "command": [
+        "npx",
+        "-y",
+        "@playwright/mcp@latest"
+      ],
       "enabled": true
     },
     "codebase-memory-mcp": {
       "type": "local",
-      "command": ["/home/codespace/.local/bin/codebase-memory-mcp"],
+      "command": [
+        "/home/codespace/.local/bin/codebase-memory-mcp"
+      ],
       "enabled": true
     },
     "chrome-devtools": {
       "type": "local",
-      "command": ["npx", "-y", "chrome-devtools-mcp@latest", "--autoConnect"],
+      "command": [
+        "npx",
+        "-y",
+        "chrome-devtools-mcp@latest",
+        "--autoConnect"
+      ],
       "enabled": true
     },
     "google-workspace": {
       "type": "local",
-      "command": ["node", ".opencode/mcp/google-workspace/server.mjs"],
+      "command": [
+        "node",
+        ".opencode/mcp/google-workspace/server.mjs"
+      ],
       "enabled": true
     },
     "nexus-memory-server": {
       "type": "local",
-      "command": ["npx", "tsx", ".opencode/mcp/nexus-memory-server.ts"],
+      "command": [
+        "npx",
+        "tsx",
+        ".opencode/mcp/nexus-memory-server.ts"
+      ],
+      "enabled": true
+    },
+    "job-apply-mcp": {
+      "type": "local",
+      "command": [
+        "npx",
+        "tsx",
+        ".opencode/mcp/job-apply-mcp.ts"
+      ],
       "enabled": true
     }
   }
