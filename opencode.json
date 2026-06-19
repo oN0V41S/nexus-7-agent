@@ -472,8 +472,12 @@
         "tsx",
         ".opencode/mcp/nexus-memory-server.ts"
       ],
+      "environment": {
+        "MONGODB_URI": "{env:MONGODB_URI}"
+      },
       "enabled": true
     },
+
     "job-apply-mcp": {
       "type": "local",
       "command": [
