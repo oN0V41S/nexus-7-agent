@@ -1,0 +1,27 @@
+opensre:
+  project: nexus-7-agent
+  environment: development
+  integration_store: /home/codespace/.tracer/integrations.json
+
+  mcp:
+    enabled: true
+    servers:
+      - name: nexus-memory
+        transport: stdio
+        command: node
+        args: [".opencode/mcp/nexus-memory-server.ts"]
+
+  providers:
+    llm:
+      - name: openai
+        model: gpt-4o
+      - name: anthropic
+        model: claude-sonnet-4-20250514
+
+  alerts:
+    templates_dir: .opencode/opensre/alerts
+    default_template: generic
+
+  output:
+    format: json
+    dir: .opencode/logs/opensre

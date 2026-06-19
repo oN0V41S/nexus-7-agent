@@ -1,0 +1,26 @@
+{
+  "alert": {
+    "id": "alert-nexus-001",
+    "source": "nexus-monitor",
+    "title": "High latency detected in API gateway",
+    "severity": "critical",
+    "timestamp": "2026-06-19T10:30:00Z",
+    "description": "P99 latency for /api/v1/users exceeded 5s threshold (current: 8.2s)",
+    "service": "api-gateway",
+    "environment": "production",
+    "labels": {
+      "team": "platform",
+      "tier": "critical"
+    }
+  },
+  "context": {
+    "recent_deploys": [
+      {
+        "service": "api-gateway",
+        "version": "v2.14.3",
+        "timestamp": "2026-06-19T09:15:00Z"
+      }
+    ],
+    "dependencies": ["user-service", "auth-service", "redis-cache"]
+  }
+}

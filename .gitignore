@@ -19,4 +19,5 @@ docs/superpowers/plans/*
 !docs/superpowers/plans/.gitkeep
 
 # Codebase Memory knowledge graph (generated index)
-.codebase-memory/
+.codebase-memory/opencode.json.tmp
+opencode.log

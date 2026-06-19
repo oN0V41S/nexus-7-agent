@@ -1,0 +1,30 @@
+{
+  "alert": {
+    "id": "datadog-event-20260619104500",
+    "source": "datadog",
+    "title": "Monitor: High CPU on worker nodes",
+    "severity": "warning",
+    "timestamp": "2026-06-19T10:45:00Z",
+    "description": "CPU usage on worker-3 is above 90% for 15 minutes",
+    "service": "worker-3",
+    "environment": "production",
+    "labels": {
+      "team": "infra",
+      "resource": "ec2"
+    },
+    "metrics": {
+      "cpu": 94.2,
+      "memory": 78.5,
+      "disk_io": 450
+    }
+  },
+  "context": {
+    "recent_deploys": [
+      {
+        "service": "data-processor",
+        "version": "v3.1.0",
+        "timestamp": "2026-06-19T10:00:00Z"
+      }
+    ]
+  }
+}
