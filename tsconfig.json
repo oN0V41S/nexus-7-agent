@@ -22,6 +22,7 @@
   },
   "include": [
     ".opencode/**/*.ts",
+    "scripts/**/*.ts",
     "jest.config.ts"
   ],
   "exclude": [
