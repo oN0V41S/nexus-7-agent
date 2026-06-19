@@ -312,18 +312,31 @@ def build_profile_from_sections(sections: dict[str, str]) -> dict:
     skills_text = " ".join([
         sections.get(h, "") for h in ["habilidades", "skills", "cursos"]
     ])
-    # Extrai skills como palavras capitalizadas
-    skill_words = re.findall(r"[A-Z][a-zA-Z+#]+(?:\s*[A-Z][a-zA-Z+#]*)*", skills_text)
-    skills = sorted(set(s.strip() for s in skill_words if len(s.strip()) > 1))
+    # EXTRAI skills como lista de palavras/termos separados por vírgula, pipe ou bullet
+    # Preserva termos como "CI/CD", "Shell Script", "Git Flow"
+    skills = []
+    for separator in [",", "|", "•"]:
+        if separator in skills_text:
+            skills = [s.strip() for s in skills_text.split(separator) if s.strip()]
+            break
+    if not skills:
+        # Fallback: extrai palavras capitalizadas (apenas se não achou separador)
+        skill_words = re.findall(r"[A-Z][a-zA-Z+#/]+(?:\s*[A-Z][a-zA-Z+#/]*)*", skills_text)
+        skills = sorted(set(s.strip() for s in skill_words if len(s.strip()) > 1))
+    skills = sorted(set(skills))
 
-    experience = sections.get("experiência", "") or sections.get("experiencia", "")
-    education = sections.get("formação", "") or sections.get("formacao", "") \
+    experience_raw = sections.get("experiência", "") or sections.get("experiencia", "")
+    experience = normalize_text(experience_raw)
+    education_raw = sections.get("formação", "") or sections.get("formacao", "") \
         or sections.get("educação", "") or sections.get("educacao", "")
+    education = normalize_text(education_raw)
 
     profile = {
         "skills": skills,
-        "experience": normalize_text(experience),
-        "education": normalize_text(education),
+        "experience": experience,
+        "experience_raw": experience_raw,  # Preserva conteúdo original com bullets
+        "education": education,
+        "education_raw": education_raw,  # Preserva conteúdo original
         "summary": normalize_text(
             sections.get("resumo", "") or sections.get("summary", "")
             or sections.get("objetivo", "") or sections.get("objective", "")

@@ -34,6 +34,28 @@ class TestConsolidator:
         assert "skills" in result
         assert "experience" in result
 
+    def test_build_profile_preserves_experience_bullets(self):
+        """Verifica que build_profile_from_sections preserva bullets e skills multi-word."""
+        sections = {
+            "__header": "RAFAEL TESTE\nemail@test.com",
+            "experiencia": (
+                "Analista de Dados Júnior na Zyon Tech (Dez 2024 - Atual)\n"
+                "• ETL com Python e MySQL\n"
+                "• Dashboards em Power BI e Tableau\n"
+                "• Análise exploratória de dados\n"
+            ),
+            "habilidades": "Java, Python, AWS, Docker, CI/CD, Shell Script",
+        }
+        profile = consolidator.build_profile_from_sections(sections)
+        # A experiência deve conter os bullets (•)
+        assert "ETL com Python" in profile.get("experience", "")
+        assert "Dashboards em Power BI" in profile.get("experience", "")
+        # CI/CD deve estar nas skills
+        assert "CI/CD" in profile.get("skills", [])
+        # Deve ter o campo experience_raw preservado
+        assert "experience_raw" in profile
+        assert "•" in profile["experience_raw"]
+
     def test_merge_profiles(self):
         """Verifica merge de múltiplos perfis."""
         profiles = [
