@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">22.05% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>15/68</span>
+                <span class='fraction'>0/68</span>
             </div>
         
             
@@ -37,16 +37,16 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">21.21% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>7/33</span>
+                <span class='fraction'>0/33</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">22.72% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>15/66</span>
+                <span class='fraction'>0/66</span>
             </div>
         
             
@@ -251,8 +251,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -348,17 +348,10 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -367,20 +360,27 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">14x</span>
-<span class="cline-any cline-yes">14x</span>
-<span class="cline-any cline-yes">8x</span>
-<span class="cline-any cline-yes">4x</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -429,8 +429,8 @@
  *   3. JSON file storage (last resort)
  */
 &nbsp;
-import * as fs from "node:fs";
-import * as path from "node:path";
+<span class="cstat-no" title="statement not covered" >import * as fs from "node:fs";</span>
+<span class="cstat-no" title="statement not covered" >import * as path from "node:path";</span>
 &nbsp;
 // ============================================================
 // Types
@@ -526,14 +526,14 @@ class JsonPreparedStatement implements PreparedStatement {
 // Adapter factory
 // ============================================================
 &nbsp;
-export function createDb(dbPath: string): SqliteDb {
+<span class="cstat-no" title="statement not covered" >export function <span class="fstat-no" title="function not covered" >c</span>reateDb(</span>dbPath: string): SqliteDb {
   // Attempt 1: better-sqlite3 (Node.js)
-  try {
+<span class="cstat-no" title="statement not covered" >  try {</span>
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const BetterSqlite3 = require("better-sqlite3");
-    const db = new BetterSqlite3(dbPath);
-    db.pragma("journal_mode = WAL");
-    return wrapBetterSqlite3(db);
+    const BetterSqlite3 = <span class="cstat-no" title="statement not covered" >require("better-sqlite3");</span>
+    const db = <span class="cstat-no" title="statement not covered" >new BetterSqlite3(dbPath);</span>
+<span class="cstat-no" title="statement not covered" >    db.pragma("journal_mode = WAL");</span>
+<span class="cstat-no" title="statement not covered" >    return wrapBetterSqlite3(db);</span>
   } catch {
     // Attempt 2: bun:sqlite (Bun)
 <span class="cstat-no" title="statement not covered" >    try {</span>
@@ -549,16 +549,16 @@ export function createDb(dbPath: string): SqliteDb {
   }
 }
 &nbsp;
-function wrapBetterSqlite3(raw: any): SqliteDb {
-  return {
-    exec: (sql: string) =&gt; raw.exec(sql),
+function <span class="fstat-no" title="function not covered" >wrapBetterSqlite3(</span>raw: any): SqliteDb {
+<span class="cstat-no" title="statement not covered" >  return {</span>
+    exec: <span class="fstat-no" title="function not covered" >(s</span>ql: string) =&gt; <span class="cstat-no" title="statement not covered" >raw.exec(sql),</span>
     pragma: <span class="fstat-no" title="function not covered" >(s</span>ql: string) =&gt; <span class="cstat-no" title="statement not covered" >raw.pragma(sql),</span>
-    prepare: (sql: string) =&gt; {
-      const stmt = raw.prepare(sql);
-      return {
-        run: (...params: any[]) =&gt; stmt.run(...params),
-        get: (...params: any[]) =&gt; stmt.get(...params),
-        all: (...params: any[]) =&gt; stmt.all(...params),
+    prepare: <span class="fstat-no" title="function not covered" >(s</span>ql: string) =&gt; {
+      const stmt = <span class="cstat-no" title="statement not covered" >raw.prepare(sql);</span>
+<span class="cstat-no" title="statement not covered" >      return {</span>
+        run: <span class="fstat-no" title="function not covered" >(.</span>..params: any[]) =&gt; <span class="cstat-no" title="statement not covered" >stmt.run(...params),</span>
+        get: <span class="fstat-no" title="function not covered" >(.</span>..params: any[]) =&gt; <span class="cstat-no" title="statement not covered" >stmt.get(...params),</span>
+        all: <span class="fstat-no" title="function not covered" >(.</span>..params: any[]) =&gt; <span class="cstat-no" title="statement not covered" >stmt.all(...params),</span>
         transaction: <span class="fstat-no" title="function not covered" >&lt;T extends (...args: any[]) =&gt; any&gt;(f</span>n: T) =&gt; <span class="cstat-no" title="statement not covered" >raw.transaction(fn),</span>
       };
     },
@@ -604,7 +604,7 @@ function <span class="fstat-no" title="function not covered" >wrapBunSqlite(</sp
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-06-10T18:46:07.385Z
+                at 2026-06-19T16:28:24.181Z
             </div>
         <script src="../prettify.js"></script>
         <script>
