@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "description": "Ecossistema de Agentes de IA para orquestração de tarefas e automação de código",
   "scripts": {
-    "news-cron": "tsx scripts/news-cron.ts"
+    "news-cron": "tsx scripts/news-cron.ts",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",

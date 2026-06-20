@@ -80,7 +80,7 @@ async function main(): Promise<void> {
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);
     logger.error(`❌ Falha na publicação no Notion`, { error: errMsg });
-    throw error; // Falha total → exit code não-zero
+    throw error;
   }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);

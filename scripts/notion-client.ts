@@ -332,7 +332,7 @@ export async function ensureDatabase(token: string, parentPageId: string): Promi
     return existing.id;
   }
 
-  logger.info(`Criando novo Database na página ${parentPageId}...`);
+  logger.info('Criando novo Database na pagina pai...');
   const db = await createDatabase(token, parentPageId);
   logger.info(`Database criado: ${db.id}`);
   return db.id;
