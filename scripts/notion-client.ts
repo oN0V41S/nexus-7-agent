@@ -119,11 +119,11 @@ async function searchDatabase(
 
 // ─── Criar Database ─────────────────────────────────
 
-async function createDatabase(token: string): Promise<NotionDatabase> {
+async function createDatabase(token: string, parentPageId: string): Promise<NotionDatabase> {
   return notionFetchJson<NotionDatabase>('/databases', token, {
     method: 'POST',
     body: JSON.stringify({
-      parent: { type: 'workspace' },
+      parent: { type: 'page_id', page_id: parentPageId },
       title: [
         { type: 'text', text: { content: '📰 Meu News Personalizado' } },
       ],
@@ -323,7 +323,7 @@ function formatDateBR(isoDate: string): string {
  * Procura por "📰 Meu News Personalizado" no workspace.
  * Se não existir, cria um novo.
  */
-export async function ensureDatabase(token: string): Promise<string> {
+export async function ensureDatabase(token: string, parentPageId: string): Promise<string> {
   logger.info('Verificando se Database "📰 Meu News Personalizado" existe...');
 
   const existing = await searchDatabase(token, '📰 Meu News Personalizado');
@@ -332,8 +332,8 @@ export async function ensureDatabase(token: string): Promise<string> {
     return existing.id;
   }
 
-  logger.info('Criando novo Database no workspace raiz...');
-  const db = await createDatabase(token);
+  logger.info(`Criando novo Database na página ${parentPageId}...`);
+  const db = await createDatabase(token, parentPageId);
   logger.info(`Database criado: ${db.id}`);
   return db.id;
 }

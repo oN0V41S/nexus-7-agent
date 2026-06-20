@@ -43,6 +43,7 @@ export interface EnvConfig {
   GEMINI_API_KEY: string;
   NEWSAPI_KEY: string;
   NOTION_TOKEN: string;
+  NOTION_PARENT_PAGE_ID: string;
 }
 
 // ─── Constantes ──────────────────────────────────────
@@ -135,6 +136,7 @@ export const GEMINI_CONFIG = {
 } as const;
 export const NOTION_API_BASE = 'https://api.notion.com/v1';
 export const NOTION_VERSION = '2022-06-28';
+export const NOTION_DATABASE_NAME = 'NewsDB';
 
 export const MAX_RETRIES = 3;
 export const RATE_LIMIT_MS = 350;
@@ -147,6 +149,7 @@ export function validateEnv(): EnvConfig {
     'GEMINI_API_KEY',
     'NEWSAPI_KEY',
     'NOTION_TOKEN',
+    'NOTION_PARENT_PAGE_ID',
   ] as const;
 
   const missing: string[] = [];
@@ -168,5 +171,6 @@ export function validateEnv(): EnvConfig {
     GEMINI_API_KEY: process.env.GEMINI_API_KEY!,
     NEWSAPI_KEY: process.env.NEWSAPI_KEY!,
     NOTION_TOKEN: process.env.NOTION_TOKEN!,
+    NOTION_PARENT_PAGE_ID: process.env.NOTION_PARENT_PAGE_ID!,
   };
 }

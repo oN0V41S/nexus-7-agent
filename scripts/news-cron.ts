@@ -12,7 +12,7 @@
  *   npx tsx scripts/news-cron.ts
  *
  * Requer variáveis de ambiente:
- *   GEMINI_API_KEY, NEWSAPI_KEY, NOTION_TOKEN
+ *   GEMINI_API_KEY, NEWSAPI_KEY, NOTION_TOKEN, NOTION_PARENT_PAGE_ID
  */
 
 import { validateEnv, CATEGORIES, RATE_LIMIT_MS } from './config';
@@ -74,13 +74,13 @@ async function main(): Promise<void> {
   logger.info('📝 Publicando no Notion...');
 
   try {
-    const databaseId = await ensureDatabase(env.NOTION_TOKEN);
+    const databaseId = await ensureDatabase(env.NOTION_TOKEN, env.NOTION_PARENT_PAGE_ID);
     await publishDailyEdition(databaseId, env.NOTION_TOKEN, sections);
     logger.info('✅ Publicação concluída com sucesso!');
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);
     logger.error(`❌ Falha na publicação no Notion`, { error: errMsg });
-    throw error;
+    throw error; // Falha total → exit code não-zero
   }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
