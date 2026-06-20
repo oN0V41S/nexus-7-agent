@@ -1,30 +1,29 @@
 /**
  * NewsAPI Client — Coleta notícias via NewsAPI.org
  *
+ * Estratégia (v2):
+ *   - Categorias padrão (general, business, technology, sports, health):
+ *     → top-headlines (country=br, category=...)
+ *     → fallback para everything se retornar 0
+ *   - Categorias custom (brazil, career, goodnews):
+ *     → everything (q=..., language=pt) diretamente
+ *
  * Segurança: API key no header X-Api-Key (nunca em query param).
  * Todas as requisições têm timeout via AbortController.
+ * Rate limiting entre chamadas para evitar throttle da NewsAPI.
  */
 
 import {
   NEWSAPI_BASE_URL,
   MAX_RETRIES,
   MAX_ARTICLES_PER_CATEGORY,
-  CATEGORIES,
+  RATE_LIMIT_MS,
   type NewsArticle,
   type CategoryConfig,
 } from './config';
 import { sleep, fetchWithTimeout, createLogger } from './utils';
 
 const logger = createLogger('news-fetcher');
-
-// Categorias que usam o parâmetro `category` da NewsAPI (vs query search)
-const NEWSAPI_STANDARD_CATEGORIES = new Set([
-  'general',
-  'business',
-  'technology',
-  'sports',
-  'health',
-]);
 
 export interface NewsApiResponse {
   status: string;
@@ -40,35 +39,56 @@ export interface NewsApiResponse {
 }
 
 /**
- * Busca notícias para uma categoria específica.
- * Retorna array vazio em caso de falha (não quebra o pipeline).
+ * Busca no endpoint /everything (keyword search em todo o acervo).
+ * Mais indicado para queries custom e fallback.
  */
-export async function fetchNewsByCategory(
+async function fetchEverything(
   category: CategoryConfig,
   apiKey: string
 ): Promise<NewsArticle[]> {
-  const params = new URLSearchParams();
+  const params = new URLSearchParams({
+    q: category.newsApiQuery,
+    language: 'pt',
+    sortBy: 'publishedAt',
+    pageSize: String(MAX_ARTICLES_PER_CATEGORY),
+  });
+  const url = `${NEWSAPI_BASE_URL}/everything?${params.toString()}`;
 
-  if (NEWSAPI_STANDARD_CATEGORIES.has(category.id)) {
-    params.set('country', 'br');
-    params.set('category', category.id);
-  } else {
-    params.set('q', category.newsApiQuery);
-    params.set('language', 'pt');
-    params.set('sortBy', 'popularity');
-  }
+  return executeRequest(url, apiKey, category);
+}
 
-  params.set('pageSize', String(MAX_ARTICLES_PER_CATEGORY));
+/**
+ * Busca no endpoint /top-headlines (breaking news por país/categoria).
+ * Mais indicado para as 5 categorias padrão da NewsAPI.
+ */
+async function fetchTopHeadlines(
+  category: CategoryConfig,
+  apiKey: string
+): Promise<NewsArticle[]> {
+  const params = new URLSearchParams({
+    country: 'br',
+    category: category.id,
+    pageSize: String(MAX_ARTICLES_PER_CATEGORY),
+  });
   const url = `${NEWSAPI_BASE_URL}/top-headlines?${params.toString()}`;
 
+  return executeRequest(url, apiKey, category);
+}
+
+/**
+ * Executa uma requisição GET para a URL com retry exponencial.
+ */
+async function executeRequest(
+  url: string,
+  apiKey: string,
+  category: CategoryConfig
+): Promise<NewsArticle[]> {
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const response = await fetchWithTimeout(url, {
-        headers: {
-          'X-Api-Key': apiKey,
-        },
+        headers: { 'X-Api-Key': apiKey },
       });
 
       if (!response.ok) {
@@ -109,9 +129,62 @@ export async function fetchNewsByCategory(
     }
   }
 
-  logger.error(
-    `Falha ao buscar "${category.label}" após ${MAX_RETRIES} tentativas`,
-    { error: lastError?.message }
-  );
+  logger.warn(`Falha ao buscar "${category.label}" após ${MAX_RETRIES} tentativas`, {
+    error: lastError?.message,
+  });
   return [];
+}
+
+/**
+ * Busca notícias para uma categoria com fallback inteligente.
+ *
+ * Categorias padrão (general, business, technology, sports, health):
+ *   1. top-headlines (country=br, category=id)
+ *   2. Se retornar 0 artigos → fallback para everything (q=query)
+ *
+ * Categorias custom (brazil, career, goodnews):
+ *   1. everything (q=query, language=pt) diretamente
+ */
+export async function fetchNewsByCategory(
+  category: CategoryConfig,
+  apiKey: string
+): Promise<NewsArticle[]> {
+  let articles: NewsArticle[] = [];
+
+  // ── Estratégia 1: top-headlines (apenas categorias padrão) ──
+  if (category.isStandardCategory) {
+    logger.debug(`  → "${category.label}": tentando top-headlines...`);
+    articles = await fetchTopHeadlines(category, apiKey);
+
+    if (articles.length > 0) {
+      return articles;
+    }
+
+    logger.info(
+      `  → "${category.label}": top-headlines vazio (0 artigos), tentando fallback everything...`
+    );
+    await sleep(RATE_LIMIT_MS); // pausa antes do fallback
+  }
+
+  // ── Estratégia 2: everything (fallback ou direto) ──
+  logger.debug(`  → "${category.label}": tentando everything (q="${category.newsApiQuery}")...`);
+  articles = await fetchEverything(category, apiKey);
+
+  if (articles.length > 0) {
+    return articles;
+  }
+
+  // ── Último recurso: everything sem filtro de idioma ──
+  logger.info(`  → "${category.label}": everything vazio, tentando sem filtro de idioma...`);
+  await sleep(RATE_LIMIT_MS);
+
+  const params = new URLSearchParams({
+    q: category.newsApiQuery,
+    sortBy: 'relevancy',
+    pageSize: String(MAX_ARTICLES_PER_CATEGORY),
+  });
+  const url = `${NEWSAPI_BASE_URL}/everything?${params.toString()}`;
+  articles = await executeRequest(url, apiKey, category);
+
+  return articles;
 }

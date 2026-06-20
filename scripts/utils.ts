@@ -77,6 +77,7 @@ export function sanitize(value: unknown): unknown {
 }
 
 export interface Logger {
+  debug: (msg: string, data?: unknown) => void;
   info: (msg: string, data?: unknown) => void;
   warn: (msg: string, data?: unknown) => void;
   error: (msg: string, data?: unknown) => void;
@@ -99,12 +100,15 @@ export function createLogger(context: string): Logger {
       console.error(line);
     } else if (level === 'WARN') {
       console.warn(line);
+    } else if (level === 'DEBUG') {
+      console.debug(line);
     } else {
       console.log(line);
     }
   };
 
   return {
+    debug: (msg: string, data?: unknown) => log('DEBUG', msg, data),
     info: (msg: string, data?: unknown) => log('INFO', msg, data),
     warn: (msg: string, data?: unknown) => log('WARN', msg, data),
     error: (msg: string, data?: unknown) => log('ERROR', msg, data),

@@ -1,6 +1,8 @@
 /**
  * Config — Tipos, constantes e validação de ambiente
  * para o CRON News → Notion
+ *
+ * v2.0 — Queries em português BR, fallback universal para everything endpoint
  */
 
 // ─── Tipos ───────────────────────────────────────────
@@ -30,6 +32,8 @@ export interface CategoryConfig {
   emoji: string;
   label: string;
   newsApiQuery: string;
+  /** Se true, usa top-headlines (country=br&category=id). Se false, usa everything (q=query). */
+  isStandardCategory: boolean;
   prompt: string;
 }
 
@@ -54,6 +58,7 @@ export const CATEGORIES: CategoryConfig[] = [
     emoji: '🌎',
     label: 'Mundo',
     newsApiQuery: 'general',
+    isStandardCategory: true,
     prompt:
       'Resuma as principais notícias internacionais em 3-4 parágrafos com bullet points. ' +
       'Destaque eventos geopolíticos relevantes. Idioma: português brasileiro.',
@@ -62,7 +67,8 @@ export const CATEGORIES: CategoryConfig[] = [
     id: 'brazil',
     emoji: '🇧🇷',
     label: 'Brasil',
-    newsApiQuery: 'brazil',
+    newsApiQuery: 'Brasil política economia',
+    isStandardCategory: false,
     prompt:
       'Resuma as principais notícias do Brasil em 4-5 parágrafos com bullet points. ' +
       'Cubra política, economia, sociedade. Seja mais extenso que as outras seções. ' +
@@ -73,6 +79,7 @@ export const CATEGORIES: CategoryConfig[] = [
     emoji: '💼',
     label: 'Negócios & Economia',
     newsApiQuery: 'business',
+    isStandardCategory: true,
     prompt:
       'Resuma as principais notícias de negócios e economia em 2-3 parágrafos com bullet points. ' +
       'Destaque mercados, empresas e tendências econômicas. Idioma: português brasileiro.',
@@ -82,6 +89,7 @@ export const CATEGORIES: CategoryConfig[] = [
     emoji: '🤖',
     label: 'Tecnologia & IA',
     newsApiQuery: 'technology',
+    isStandardCategory: true,
     prompt:
       'Resuma as principais novidades de tecnologia e IA em 2-3 parágrafos com bullet points. ' +
       'Destaque inovações, lançamentos e tendências tech. Idioma: português brasileiro.',
@@ -90,7 +98,8 @@ export const CATEGORIES: CategoryConfig[] = [
     id: 'career',
     emoji: '🚀',
     label: 'Minha Carreira',
-    newsApiQuery: 'technology career artificial intelligence',
+    newsApiQuery: 'carreira tecnologia inteligência artificial mercado trabalho',
+    isStandardCategory: false,
     prompt:
       'Resuma notícias sobre carreira, tecnologia, IA e mercado de trabalho em 2-3 parágrafos. ' +
       'Foco em: tendências de carreira em tech, IA generativa, mercado BR e mundial. ' +
@@ -100,7 +109,8 @@ export const CATEGORIES: CategoryConfig[] = [
     id: 'sports',
     emoji: '⚽',
     label: 'Esporte & Cultura',
-    newsApiQuery: 'sports entertainment',
+    newsApiQuery: 'futebol brasileirão esporte entretenimento',
+    isStandardCategory: true,
     prompt:
       'Resuma as principais notícias de esportes e entretenimento em 2-3 parágrafos. ' +
       'Idioma: português brasileiro.',
@@ -109,7 +119,8 @@ export const CATEGORIES: CategoryConfig[] = [
     id: 'health',
     emoji: '💊',
     label: 'Saúde & Ciência',
-    newsApiQuery: 'health science',
+    newsApiQuery: 'saúde ciência medicina descoberta',
+    isStandardCategory: true,
     prompt:
       'Resuma os principais avanços em saúde e ciência em 2-3 parágrafos. ' +
       'Destaque descobertas, estudos e inovações médicas. Idioma: português brasileiro.',
@@ -118,7 +129,8 @@ export const CATEGORIES: CategoryConfig[] = [
     id: 'goodnews',
     emoji: '🌞',
     label: 'Notícias Boas',
-    newsApiQuery: 'good news inspiration',
+    newsApiQuery: 'história inspiradora superação positivo notícia boa',
+    isStandardCategory: false,
     prompt:
       'Selecione e resuma APENAS notícias positivas e inspiradoras em 2-3 parágrafos. ' +
       'Histórias de superação, descobertas felizes, atos de bondade. ' +
