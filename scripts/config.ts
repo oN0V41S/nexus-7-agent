@@ -55,7 +55,7 @@ export interface EnvConfig {
 export const CATEGORIES: CategoryConfig[] = [
   {
     id: 'general',
-    emoji: '🌎',
+    emoji: '\uD83C\uDF0E',
     label: 'Mundo',
     newsApiQuery: 'general',
     isStandardCategory: true,
@@ -65,7 +65,7 @@ export const CATEGORIES: CategoryConfig[] = [
   },
   {
     id: 'brazil',
-    emoji: '🇧🇷',
+    emoji: '\uD83C\uDDE7\uD83C\uDDF7',
     label: 'Brasil',
     newsApiQuery: 'Brasil política economia',
     isStandardCategory: false,
@@ -76,7 +76,7 @@ export const CATEGORIES: CategoryConfig[] = [
   },
   {
     id: 'business',
-    emoji: '💼',
+    emoji: '\uD83D\uDCBC',
     label: 'Negócios & Economia',
     newsApiQuery: 'business',
     isStandardCategory: true,
@@ -86,7 +86,7 @@ export const CATEGORIES: CategoryConfig[] = [
   },
   {
     id: 'technology',
-    emoji: '🤖',
+    emoji: '\uD83E\uDD16',
     label: 'Tecnologia & IA',
     newsApiQuery: 'technology',
     isStandardCategory: true,
@@ -96,7 +96,7 @@ export const CATEGORIES: CategoryConfig[] = [
   },
   {
     id: 'career',
-    emoji: '🚀',
+    emoji: '\uD83D\uDE80',
     label: 'Minha Carreira',
     newsApiQuery: 'carreira tecnologia inteligência artificial mercado trabalho',
     isStandardCategory: false,
@@ -107,7 +107,7 @@ export const CATEGORIES: CategoryConfig[] = [
   },
   {
     id: 'sports',
-    emoji: '⚽',
+    emoji: '\u26BD',
     label: 'Esporte & Cultura',
     newsApiQuery: 'futebol brasileirão esporte entretenimento',
     isStandardCategory: true,
@@ -117,7 +117,7 @@ export const CATEGORIES: CategoryConfig[] = [
   },
   {
     id: 'health',
-    emoji: '💊',
+    emoji: '\uD83D\uDC8A',
     label: 'Saúde & Ciência',
     newsApiQuery: 'saúde ciência medicina descoberta',
     isStandardCategory: true,
@@ -127,7 +127,7 @@ export const CATEGORIES: CategoryConfig[] = [
   },
   {
     id: 'goodnews',
-    emoji: '🌞',
+    emoji: '\uD83C\uDF1E',
     label: 'Notícias Boas',
     newsApiQuery: 'história inspiradora superação positivo notícia boa',
     isStandardCategory: false,
@@ -141,7 +141,7 @@ export const CATEGORIES: CategoryConfig[] = [
 export const NEWSAPI_BASE_URL = 'https://newsapi.org/v2';
 export const GEMINI_BASE_URL =
   'https://generativelanguage.googleapis.com/v1beta';
-export const GEMINI_MODEL = 'gemini-2.0-flash';
+export const GEMINI_MODEL = 'gemini-3.1-flash-lite';
 export const GEMINI_CONFIG = {
   temperature: 0.7,
   maxOutputTokens: 1024,
