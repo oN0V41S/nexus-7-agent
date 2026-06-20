@@ -231,6 +231,14 @@ async function createDailyPage(
 
 // ─── Adicionar blocos de seção ──────────────────────
 
+/** Limite de caracteres por rich_text block na Notion API */
+const NOTION_MAX_TEXT_LENGTH = 2000;
+
+function truncate(str: string, maxLen: number): string {
+  if (str.length <= maxLen) return str;
+  return str.slice(0, maxLen - 1) + '\u2026'; // ellipsis
+}
+
 function createToggleBlock(
   emoji: string,
   title: string,
@@ -255,7 +263,7 @@ function createToggleBlock(
             rich_text: [
               {
                 type: 'text',
-                text: { content },
+                text: { content: truncate(content, NOTION_MAX_TEXT_LENGTH) },
               },
             ],
           },
