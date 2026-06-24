@@ -53,6 +53,7 @@ O Nexus usa um **harness de 6 estágios** (SPEC → PLAN → ANALYZE → BUILD �
 | `agent-creator` | Meta-agente que cria outros agentes a partir de descrição natural |
 | `cbm-agent` | Code intelligence via codebase-memory-mcp knowledge graph (search, trace, architecture) |
 | `project-review` | Revisão de estrutura e arquitetura |
+| `prototyping-workflow` | Code-as-Prototype: protótipos isolados em `prototypes/` com validação visual via Playwright |
 
 > Skills removidas por redundância: `spec-driven-dev`, `documentation-architect`, `quality-assurance-analyst`, `commit-push`, `playwright-automation`, `chrome-devtools`, `notion-agent-copilot`, `google-workspace`, `testsprite-mcp`. Seus conteúdos foram incorporados aos respectivos agentes ou ao `harness-workflow`.
 >
