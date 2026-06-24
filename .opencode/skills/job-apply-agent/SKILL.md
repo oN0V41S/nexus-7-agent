@@ -44,7 +44,7 @@ Skill para o pipeline de Job Application Workflow. Consome ferramentas MCP (Chro
 | `/job-search [termo] [local] [filtros]` | Busca vagas em múltiplas plataformas | `commands/search.md` |
 | `/job-analyze [vaga_id \| --all]` | Calcula match score (0-100%) e gaps | `commands/analyze.md` |
 | `/job-consolidate [pdfs]` | Consolida PDFs em DOCX ATS + PDF + profile.json + KB | `commands/consolidate.md` |
-| `/job-kb [pdfs] [--json] [--docx] [--output]` | Gera Knowledge Base .md completa do currículo | `commands/kb.md` |
+| `/job-kb [pdfs] [--json] [--docx] [--output]` | Gera Knowledge Base .md completa e sincroniza com Notion | `commands/kb.md` |
 | `/job-adapt [vaga_id]` | Gera currículo adaptado (MD + DOCX) + carta (TXT) | `commands/adapt.md` |
 | `/job-apply [vaga_id \| --batch N]` | Executa aplicação com aprovação humana | `commands/apply.md` |
 | `/job-track [ação] [args]` | Gerencia histórico de candidaturas | `commands/track.md` |
@@ -78,8 +78,8 @@ PDF(s)
   │         │
   │         └── profile.json ──────────────────────────────────┐
   │                                                            │
-  ├── /job-kb → data/job-apply-agent/<slug>-kb-<data>.md       │
-  │               (fonte de verdade para currículos)            │
+  ├── /job-kb → data/job-apply-agent/<slug>-kb-<data>.md ──→ Notion KB Page
+  │               (fonte de verdade para currículos)
   │                                                            │
   /job-search → search_results.json                            │
        │                                                       │
@@ -158,6 +158,23 @@ ollama serve && ollama pull llama3.1:8b
 # Playwright MCP: automação headless Glassdoor/Indeed/Monster
 # Notion MCP: tracking (opcional)
 ```
+
+---
+
+## Regra de Ouro — Knowledge Base
+
+> **A KB é a FONTE DE VERDADE. Nunca simplifique, resuma, comprima ou omita informações.**
+>
+> - Se o currículo original tem 10 bullets de experiência → a KB tem os 10 bullets
+> - Se o currículo original lista 15 habilidades → a KB lista as 15 habilidades
+> - Se o candidato tem 6 certificações → a KB tem as 6 certificações
+> - Se há 3 versões de currículo → a KB consolida TODAS as informações sem duplicar o óbvio
+>
+> **O que é permitido:** Reorganizar por seção, normalizar formatação, unificar nomes iguais (ex: "SENAI" e "SENAI Suíço-Brasileira" → usar o mais completo).
+>
+> **O que NÃO é permitido:** Resumir experiência em 1 linha, agrupar habilidades em "e outros", omitir certificações "menores", simplificar projetos para "breve descrição".
+>
+> **Violação:** Se a KB gerada tiver MENOS informação que o original, é um BUG. Reescrever.
 
 ---
 
@@ -318,13 +335,53 @@ Se `/job-kb` produzir uma KB onde:
 | 1.1.0 | 2026-06-16 | Nexus Orquestrador | Adicionado sanity checks, lições aprendidas, limitações do parser, detecção de multi-curriculo, suporte a emoji |
 | 1.2.0 | 2026-06-16 | Nexus Orquestrador | Regra unificada: TODOS os artefatos salvos em `data/job-apply-agent/` |
 | 1.3.0 | 2026-06-17 | Nexus Orquestrador | Currículo DOCX em vez de PDF (python-docx); Carta TXT em vez de PDF; removido fpdf2 da geração principal |
+| 1.5.0 | 2026-06-24 | Nexus Orquestrador | Adicionado Regra de Ouro KB (nunca simplificar); Notion Tracking migrado para banco VagasTracking com propriedades estruturadas |
 | 1.4.0 | 2026-06-17 | Nexus Orquestrador | **Markdown-first pipeline**: currículo gerado em MD → convertido para DOCX; seções dinâmicas via `_build_section_list`; parser MD→DOCX com suporte a headers, bold, hyperlinks, bullets; `_add_hyperlink` com fallback seguro; `generator.py` v3.0.0 |
 
-## Notion Tracking
+## Notion Tracking — Banco de Dados VagasTracking
 
-A página de Tracking de Candidaturas no Notion está em:
-- **URL fixa:** `https://app.notion.com/p/rafaelnovais/Tracking-de-Candidaturas-3823da06f61381fcbd75d7cc2fb46985`
-- **Page ID:** `3823da06-f613-81fc-bd75-d7cc2fb46985`
+O tracking de candidaturas é feito no banco de dados **VagasTracking**.
+
+### Localização
+- **URL do banco:** `https://app.notion.com/p/rafaelnovais/Candidaturas-3823da06f61381fcbd75d7cc2fb46985`
+- **Database ID:** `3893da06-f613-81f3-bbc1-f7f4cef3fe1b`
 - **Workspace:** "Notion de Rafael Novais"
 
-Sempre consolidar/atualizar o tracking NESTA página específica. Adicionar blocos de conteúdo (parágrafos, bulleted lists) com: ID da vaga, empresa, cargo, score, status, plataforma, prazo, URL.
+### Propriedades do Banco
+
+| Propriedade | Tipo | Descrição |
+|---|---|---|
+| **Nome da Vaga** | title (obrigatório) | Título do cargo |
+| **Empresa** | rich_text | Nome da empresa contratante |
+| **Nível** | select | Estágio, Júnior, Pleno, Sênior, Lead |
+| **Área** | select | Backend, Frontend, Full Stack, Cloud/DevOps, Dados/IA, Mobile |
+| **Plataforma** | rich_text | Onde a vaga foi encontrada (LinkedIn, Nerdin, etc.) |
+| **Link** | url | URL da vaga original |
+| **Data** | date | Data de submissão/criação |
+| **Score** | number (percent) | Match score 0-100% |
+| **Status** | select | Preparado, Enviado, Em análise, Entrevista, Rejeitado, Contratado |
+
+### Como Inserir
+Sempre criar uma **página dentro do banco de dados VagasTracking** (NUNCA adicionar blocos soltos na página de tracking).
+
+- Usar `POST /v1/pages` com `parent.database_id`
+- Preencher TODAS as propriedades relevantes
+- Status inicial: **"Preparado"** (antes da aplicação) → atualizar após envio
+
+### Exemplo de Payload
+```json
+{
+  "parent": {"database_id": "3893da06-f613-81f3-bbc1-f7f4cef3fe1b"},
+  "properties": {
+    "Nome da Vaga": {"title": [{"text": {"content": "[Cargo]"}}]},
+    "Empresa": {"rich_text": [{"text": {"content": "[Empresa]"}}]},
+    "Nível": {"select": {"name": "Júnior"}},
+    "Área": {"select": {"name": "Cloud/DevOps"}},
+    "Plataforma": {"rich_text": [{"text": {"content": "[Plataforma]"}}]},
+    "Link": {"url": "[URL]"},
+    "Data": {"date": {"start": "YYYY-MM-DD"}},
+    "Score": {"number": 0.8},
+    "Status": {"select": {"name": "Preparado"}}
+  }
+}
+```
