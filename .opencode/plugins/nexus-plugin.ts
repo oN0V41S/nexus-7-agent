@@ -16,6 +16,13 @@
  * - experimental.session.compacting → contexto otimizado + auto-handoff
  * - permission.ask      → registro de permissões
  * - chat.params         → tuning de parâmetros por agente
+ *
+ * v4.1: FIX — compactation hook error handling
+ *   - Adicionado try-catch global no hook de compactação
+ *   - Try-catch individual para cada operação (ContextManager, Metrics, Cache, Handoff)
+ *   - Corrigido acesso a propriedades de DailyMetrics (performance.totalToolCalls, quality.patternAdherenceRate)
+ *   - cacheManager.save() agora é chamado com .catch() para Promises não tratadas
+ *   - NUNCA propaga exceção — compactação com erro preserva a sessão
  */
 
 import type { Plugin } from "@opencode-ai/plugin";
@@ -141,7 +148,7 @@ const NexusPlugin: Plugin = async (ctx) => {
   // Load cache from disk
   cacheManager.load();
 
-  appendLog(worktree, "INFO", "plugin", "Nexus Plugin v4 iniciado (ContextManager + Cache + Metrics)", {
+  appendLog(worktree, "INFO", "plugin", "Nexus Plugin v4.1 iniciado (error-handling fix)", {
     directory: ctx.directory,
   });
 
@@ -195,8 +202,8 @@ const NexusPlugin: Plugin = async (ctx) => {
 
       if (input.tool === "edit") {
         const args = input.arguments as { filePath?: string; oldString?: string; newString?: string };
-        const filePathArg = args.filePath;
-        const modelOldString = args.oldString;
+        const filePathArg = args?.filePath;
+        const modelOldString = args?.oldString;
 
         if (filePathArg && modelOldString) {
           try {
@@ -285,7 +292,6 @@ const NexusPlugin: Plugin = async (ctx) => {
 
         // REQ-004: Record FlexEdit stats
         if (input.tool === "edit") {
-          const args = input.arguments as { oldString?: string };
           metrics.recordFlexEdit(
             output.output?.includes("matched and corrected") || false,
             success,
@@ -338,97 +344,137 @@ const NexusPlugin: Plugin = async (ctx) => {
 
     // ============================================================
     // Compaction: contexto otimizado (REQ-001) + auto-handoff
+    // v4.1: Error handling completo — NUNCA propaga exceção
     // ============================================================
 
     "experimental.session.compacting": async (input, output) => {
-      const summary = tracker.getSummary(input.sessionID);
+      try {
+        const summary = tracker.getSummary(input.sessionID);
 
-      // Contexto do harness
-      output.context.push(
-        "[Nexus Harness] Projeto usa harness de 6 estágios: SPEC → PLAN → ANALYZE → BUILD → REVIEW → DOCUMENT.",
-      );
-      output.context.push(
-        "[Nexus Harness] Sub-agents: @security-secret-auditor, @quality-assurance-analyst, @docs-architect, @cbm-agent.",
-      );
-      output.context.push(
-        "[Nexus Harness] Models: orquestradores usam gemini-2.5-pro, sub-agents usam deepseek-v4-flash-free.",
-      );
-      output.context.push(
-        "[Nexus Harness] Tools: nexus-log (log), nexus-memory (memória), nexus-handoff (handoff).",
-      );
-      output.context.push(
-        "[Nexus Harness] Use /pipeline para ciclo completo, /commit-&-docs para commit com docs.",
-      );
-
-      if (summary) {
+        // Contexto do harness (sempre injetado)
         output.context.push(
-          `[Nexus Sessão] ${summary.messageCount} mensagens, ${summary.toolCalls.length} ferramentas executadas.`,
+          "[Nexus Harness] Projeto usa harness de 6 estágios: SPEC → PLAN → ANALYZE → BUILD → REVIEW → DOCUMENT.",
+        );
+        output.context.push(
+          "[Nexus Harness] Sub-agents: @security-secret-auditor, @quality-assurance-analyst, @docs-architect, @cbm-agent.",
+        );
+        output.context.push(
+          "[Nexus Harness] Models: orquestradores usam gemini-2.5-pro, sub-agents usam deepseek-v4-flash-free.",
+        );
+        output.context.push(
+          "[Nexus Harness] Tools: nexus-log (log), nexus-memory (memória), nexus-handoff (handoff).",
+        );
+        output.context.push(
+          "[Nexus Harness] Use /pipeline para ciclo completo, /commit-&-docs para commit com docs.",
         );
 
-        // REQ-001: Injeta contexto otimizado do ContextManager
-        const optimizedContext = contextManager.getOptimizedContext(input.sessionID);
-        if (optimizedContext.length > 0) {
-          output.context.push("[Nexus ContextManager] Contexto otimizado:");
-          for (const ctx of optimizedContext) {
-            output.context.push(ctx);
+        if (summary) {
+          output.context.push(
+            `[Nexus Sessão] ${summary.messageCount} mensagens, ${summary.toolCalls.length} ferramentas executadas.`,
+          );
+
+          // REQ-001: Injeta contexto otimizado do ContextManager
+          try {
+            const optimizedContext = contextManager.getOptimizedContext(input.sessionID);
+            if (optimizedContext.length > 0) {
+              output.context.push("[Nexus ContextManager] Contexto otimizado:");
+              for (const ctx of optimizedContext) {
+                output.context.push(ctx);
+              }
+            }
+            const stats = contextManager.getSessionStats(input.sessionID);
+            if (stats) {
+              output.context.push(
+                `[Nexus ContextManager] Stats: ${stats.totalMessages} msgs, ~${stats.totalTokens} tokens, ` +
+                `críticas: ${stats.importanceDistribution.critical}, altas: ${stats.importanceDistribution.high}`,
+              );
+            }
+          } catch (ctxErr) {
+            appendLog(worktree, "WARN", "session", `ContextManager falhou: ${ctxErr instanceof Error ? ctxErr.message : String(ctxErr)}`, { sessionID: input.sessionID });
           }
+
+          // REQ-004: Injeta métricas no contexto (propriedades corretas do DailyMetrics)
+          try {
+            const dailyMetrics = metrics.getDailySummary();
+            if (dailyMetrics) {
+              output.context.push(
+                `[Nexus Metrics] Hoje: ${dailyMetrics.performance.totalToolCalls} tool calls, ` +
+                `taxa de sucesso: ${dailyMetrics.quality.patternAdherenceRate.toFixed(1)}%, ` +
+                `latência avg: ${dailyMetrics.performance.avgLatencyMs.toFixed(0)}ms`,
+              );
+            }
+          } catch (metricsErr) {
+            appendLog(worktree, "WARN", "session", `Metrics falhou: ${metricsErr instanceof Error ? metricsErr.message : String(metricsErr)}`, { sessionID: input.sessionID });
+          }
+
+          // REQ-003: Injeta stats do cache
+          try {
+            const cacheStats = cacheManager.getStats();
+            if (cacheStats.totalEntries > 0) {
+              output.context.push(
+                `[Nexus Cache] ${cacheStats.totalEntries} entradas, ` +
+                `hit rate: ${(cacheStats.hitRate * 100).toFixed(1)}%, ` +
+                `~${cacheStats.estimatedTokensSaved} tokens economizados`,
+              );
+            }
+          } catch (cacheErr) {
+            appendLog(worktree, "WARN", "session", `Cache stats falhou: ${cacheErr instanceof Error ? cacheErr.message : String(cacheErr)}`, { sessionID: input.sessionID });
+          }
+
+          // Auto-handoff (com proteção contra falhas de I/O)
+          try {
+            const recentTools = summary.toolCalls.slice(-5).map((t) => t.tool);
+            const handoffId = saveHandoff(
+              worktree,
+              `Checkpoint automático - ${new Date().toLocaleString()}`,
+              `Sessão com ${summary.messageCount} mensagens e ${summary.toolCalls.length} tools. Ferramentas recentes: ${recentTools.join(", ")}`,
+              ["Revisar progresso e continuar"],
+              [],
+              "Nenhum",
+              summary.agent,
+              input.sessionID,
+            );
+            output.context.push(
+              `[Nexus Handoff] Handoff automático salvo: ${handoffId}. Use nexus-handoff action=apply handoffId=${handoffId} para retomar.`,
+            );
+          } catch (handoffErr) {
+            appendLog(worktree, "WARN", "session", `Handoff falhou: ${handoffErr instanceof Error ? handoffErr.message : String(handoffErr)}`, { sessionID: input.sessionID });
+          }
+
+          // Persiste métricas e cache (com proteção — NÃO deve quebrar a sessão)
+          try {
+            metrics.save();
+          } catch (metricsSaveErr) {
+            appendLog(worktree, "WARN", "session", `metrics.save() falhou: ${metricsSaveErr instanceof Error ? metricsSaveErr.message : String(metricsSaveErr)}`, { sessionID: input.sessionID });
+          }
+
+          try {
+            // cacheManager.save() é async — fire-and-forget com .catch()
+            cacheManager.save().catch((cacheSaveErr) => {
+              appendLog(worktree, "WARN", "session", `cacheManager.save() falhou: ${cacheSaveErr instanceof Error ? cacheSaveErr.message : String(cacheSaveErr)}`, { sessionID: input.sessionID });
+            });
+          } catch (cacheSaveErr) {
+            appendLog(worktree, "WARN", "session", `cacheManager.save() lançou exceção: ${cacheSaveErr instanceof Error ? cacheSaveErr.message : String(cacheSaveErr)}`, { sessionID: input.sessionID });
+          }
+
+          appendLog(worktree, "INFO", "session", `Sessão compactada com sucesso`, {
+            sessionID: input.sessionID,
+            messageCount: summary.messageCount,
+            toolCallCount: summary.toolCalls.length,
+          });
         }
-
-        // Estatísticas do contexto
-        const stats = contextManager.getSessionStats(input.sessionID);
-        if (stats) {
-          output.context.push(
-            `[Nexus ContextManager] Stats: ${stats.totalMessages} msgs, ~${stats.totalTokens} tokens, ` +
-            `críticas: ${stats.importanceDistribution.critical}, altas: ${stats.importanceDistribution.high}`,
-          );
-        }
-
-        // REQ-004: Injeta métricas no contexto
-        const dailyMetrics = metrics.getDailySummary();
-        if (dailyMetrics) {
-          output.context.push(
-            `[Nexus Metrics] Hoje: ${dailyMetrics.totalToolCalls} tool calls, ` +
-            `taxa de sucesso: ${dailyMetrics.successRate.toFixed(1)}%, ` +
-            `latência avg: ${dailyMetrics.avgLatency.toFixed(0)}ms`,
-          );
-        }
-
-        // REQ-003: Injeta stats do cache
-        const cacheStats = cacheManager.getStats();
-        if (cacheStats.totalEntries > 0) {
-          output.context.push(
-            `[Nexus Cache] ${cacheStats.totalEntries} entradas, ` +
-            `hit rate: ${(cacheStats.hitRate * 100).toFixed(1)}%, ` +
-            `~${cacheStats.estimatedTokensSaved} tokens economizados`,
-          );
-        }
-
-        // Auto-handoff
-        const recentTools = summary.toolCalls.slice(-5).map((t) => t.tool);
-        const handoffId = saveHandoff(
-          worktree,
-          `Checkpoint automático - ${new Date().toLocaleString()}`,
-          `Sessão com ${summary.messageCount} mensagens e ${summary.toolCalls.length} tools. Ferramentas recentes: ${recentTools.join(", ")}`,
-          ["Revisar progresso e continuar"],
-          [],
-          "Nenhum",
-          summary.agent,
-          input.sessionID,
-        );
-
-        output.context.push(
-          `[Nexus Handoff] Handoff automático salvo: ${handoffId}. Use nexus-handoff action=apply handoffId=${handoffId} para retomar.`,
-        );
-
-        // Persiste métricas e cache
-        metrics.save();
-        cacheManager.save();
-
-        appendLog(worktree, "INFO", "session", `Sessão compactada - handoff: ${handoffId}`, {
+      } catch (compactErr) {
+        // Último recurso: logar o erro mas NUNCA propagar exceção
+        // Propagar exceção quebra a sessão do Opencode
+        appendLog(worktree, "ERROR", "session", `ERRO na compactação (sessão preservada): ${compactErr instanceof Error ? compactErr.message : String(compactErr)}`, {
           sessionID: input.sessionID,
-          messageCount: summary.messageCount,
-          toolCallCount: summary.toolCalls.length,
+          stack: compactErr instanceof Error ? compactErr.stack : undefined,
         });
+
+        // Injeta contexto mínimo de recuperação
+        output.context.push(
+          "[Nexus Harness] Compactação falhou, mas a sessão foi preservada. Continue de onde parou.",
+        );
       }
     },
 
