@@ -31,3 +31,20 @@ cd /workspaces/nexus-7-agent && python3 run_job_agent.py analyze [vaga_id | --al
 ```
 
 Se `--all` for informado, analisa todas as vagas. Se um `vaga_id` for informado, analisa apenas aquela.
+
+## Lógica de Match Score
+O comando calcula match score para cada vaga:
+- **Match ≥ 70%**: Marcado como "alta compatibilidade" - elegível para geração de currículo adaptado
+- **Match 40-69%**: Marcado como "média compatibilidade" - pode ser considerado para candidatura
+- **Match < 40%**: Marcado como "baixa compatibilidade" - não recomendado para candidatura
+
+**Exemplo de saída:**
+```
+📊 Analisando compatibilidade...
+✅ Análise concluída. Resultados salvos em analyzed_results.json
+
+📋 Vagas encontradas (rankeadas):
+1. Desenvolvedor Frontend Júnior (ID: li-0001) - Match: 85% [ALTA]
+2. Engenheiro Backend Pleno (ID: li-0002) - Match: 62% [MÉDIA]
+3. Desenvolvedor Full Stack Sênior (ID: li-0003) - Match: 28% [BAIXA]
+```

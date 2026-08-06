@@ -1,0 +1,55 @@
+[
+  {
+    "name": "super-pipeline",
+    "description": "Execute complete pipeline",
+    "args": {
+      "task": {
+        "type": "string",
+        "required": true,
+        "description": "Task to execute"
+      }
+    }
+  },
+  {
+    "name": "memory",
+    "description": "Memory operations",
+    "args": {
+      "action": {
+        "type": "enum",
+        "values": ["save", "load", "list", "delete", "search"],
+        "required": true
+      },
+      "key": {
+        "type": "string",
+        "required": false
+      },
+      "value": {
+        "type": "string",
+        "required": false
+      }
+    }
+  },
+  {
+    "name": "handoff",
+    "description": "Handoff operations",
+    "args": {
+      "action": {
+        "type": "enum",
+        "values": ["create", "apply", "list"],
+        "required": true
+      },
+      "title": {
+        "type": "string",
+        "required": false
+      },
+      "summary": {
+        "type": "string",
+        "required": false
+      },
+      "handoffId": {
+        "type": "string",
+        "required": false
+      }
+    }
+  }
+]

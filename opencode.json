@@ -1,18 +1,5 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "autoupdate": true,
-  "provider": {
-    "opencode": {
-      "options": {
-        "apiKey": "{env:OPENCODE_API_KEY}"
-      }
-    },
-    "gemini": {
-      "options": {
-        "apiKey": "{env:GEMINI_API_KEY}"
-      }
-    }
-  },
   "default_agent": "orchestrator",
   "agent": {
     "orchestrator": {
@@ -401,57 +388,11 @@
       "subtask": true
     }
   },
-  "permission": {
-    "glob": "allow",
-    "grep": "allow",
-    "read": "allow",
-    "write": "ask",
-    "edit": "ask",
-    "bash": "ask",
-    "webfetch": "allow",
-    "websearch": "allow",
-    "question": "allow",
-    "task": "allow",
-    "nexus-log": "allow",
-    "nexus-memory": "allow",
-    "nexus-handoff": "allow"
-  },
   "mcp": {
-    "notion": {
-      "type": "local",
-      "command": [
-        "npx",
-        "-y",
-        "@notionhq/notion-mcp-server"
-      ],
-      "environment": {
-        "NOTION_TOKEN": "{env:NOTION_TOKEN}"
-      },
-      "enabled": true
-    },
-    "playwright": {
-      "type": "local",
-      "command": [
-        "npx",
-        "-y",
-        "@playwright/mcp@latest"
-      ],
-      "enabled": true
-    },
     "codebase-memory-mcp": {
       "type": "local",
       "command": [
         "/home/codespace/.local/bin/codebase-memory-mcp"
-      ],
-      "enabled": true
-    },
-    "chrome-devtools": {
-      "type": "local",
-      "command": [
-        "npx",
-        "-y",
-        "chrome-devtools-mcp@latest",
-        "--autoConnect"
       ],
       "enabled": true
     },

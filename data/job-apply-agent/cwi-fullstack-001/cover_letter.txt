@@ -1,0 +1,27 @@
+Rafael Augusto Novais
+São Paulo, SP | (11) 99831-7761 | rafaelaugustonnovais@gmail.com
+
+21 de julho de 2026
+
+Emily Cemin
+CWI
+emily.cemin@cwi.com.br
+
+Assunto: Candidatura para Desenvolvedor(a) Full Stack Pleno — Node.js + React
+
+Prezada Emily,
+
+Venho por meio desta manifestar meu interesse na vaga de Desenvolvedor(a) Full Stack Pleno publicada no LinkedIn, com foco em Node.js e React.
+
+Sou desenvolvedor com experiência comprovada na stack solicitada. No projeto FinanceGuy, construí uma aplicação Full Stack completa utilizando Next.js 16, React 19 e TypeScript 5.9, com arquitetura baseada em Repository Pattern, Service Layer e Dependency Injection. O projeto inclui testes automatizados com Jest, documentação de API com Swagger/OpenAPI e CI/CD via GitHub Actions.
+
+No projeto de Arquitetura de Microsserviços, atuei com NestJS (TypeScript) na construção de backend distribuído com API Gateway, comunicação assíncrona e containerização com Docker, aplicando Clean Architecture de forma rigorosa.
+
+Minha experiência profissional inclui desenvolvimento de APIs RESTful com Node.js e TypeScript no Projeto Olho Mágico, onde também implementei interfaces responsivas com React e configurei pipelines de CI/CD com Docker e Git Flow. Atualmente atuo como Engenheiro Backend na Arizona & Visto, onde desenvolvo automações e integrações sistêmicas.
+
+Possuo vivência com metodologias ágeis (Scrum, Kanban), Git Flow e boas práticas de código limpo (SOLID, Clean Code). Meu perfil é proativo, com boa comunicação e colaboração — qualidades que considero essenciais para construir soluções de qualidade em equipe.
+
+Agradeço pela oportunidade e coloco-me à disposição para uma entrevista.
+
+Atenciosamente,
+Rafael Augusto Novais

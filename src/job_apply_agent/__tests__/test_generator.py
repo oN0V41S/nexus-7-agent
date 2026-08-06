@@ -176,7 +176,7 @@ class TestGenerator:
         assert "infraestrutura" in md.lower() or "linux" in md.lower()
 
     def test_validate_resume_detects_missing_content(self):
-        """Verifica que validate_resume_completeness detecta campos ausentes."""
+        """Verifica que validate_resume_completeness detecta seções ausentes."""
         from src.job_apply_agent.generator import validate_resume_completeness
         profile = {
             "skills": ["Java", "Python", "Kubernetes"],
@@ -187,4 +187,52 @@ class TestGenerator:
         md_incomplete = "# Nome\n\n## Resumo\nSem skills, sem projetos, sem certs"
         warnings = validate_resume_completeness(md_incomplete, profile)
         assert len(warnings) > 0
-        assert any("Skill" in w for w in warnings)
+        # A nova validação foca em seções estruturais obrigatórias
+        assert any("ausente" in w for w in warnings)
+
+    def test_resume_markdown_is_length_bounded(self):
+        """Verifica que o currículo gerado respeita o orçamento ATS (1-2 páginas)."""
+        from src.job_apply_agent.generator import (
+            _build_resume_markdown,
+            MAX_SKILLS,
+            MAX_CERTS,
+            MAX_PROJECTS,
+            MAX_ROLES,
+        )
+        profile = {
+            "name": "Rafael",
+            "skills": ["Java", "Python", "AWS", "Docker", "Kubernetes", "CI/CD",
+                       "React", "Vue", "SQL", "MongoDB", "Git", "Linux", "Spring",
+                       "NestJS", "TypeScript", "Go", "Ruby", "PHP", "C#", "Swift",
+                       "Kotlin", "Rust", "Elixir", "Haskell"],
+            "experience_raw": (
+                "Engenheiro na A (2020-2021)\n• X\n• Y\n• Z\n• W\n• V\n\n"
+                "Dev na B (2021-2022)\n• X\n• Y\n• Z\n• W\n• V\n\n"
+                "Dev na C (2022-2023)\n• X\n• Y\n• Z\n• W\n• V\n\n"
+                "Dev na D (2023-2024)\n• X\n• Y\n• Z\n• W\n• V\n\n"
+                "Dev na E (2024-2025)\n• X\n• Y\n• Z\n• W\n• V\n"
+            ),
+            "certifications": [f"Cert {i} | Org {i}" for i in range(12)],
+            "projects": [{"name": f"Proj {i}", "description": "desc"} for i in range(8)],
+        }
+        job = {
+            "title": "Desenvolvedor Back-end",
+            "company": "X",
+            "description": "Java, NestJS, microserviços, Docker, Kubernetes",
+            "strengths": ["java", "nestjs"],
+            "gaps": [],
+        }
+        md = _build_resume_markdown(profile, job)
+        # Skills limitadas
+        skill_lines = [l for l in md.split("\n") if l.startswith("- ") and "," in l]
+        total_skills = sum(len(l.split(",")) for l in skill_lines)
+        assert total_skills <= MAX_SKILLS, f"{total_skills} skills excedem {MAX_SKILLS}"
+        # Certificações limitadas
+        cert_lines = [l for l in md.split("\n") if l.startswith("- Cert ")]
+        assert len(cert_lines) <= MAX_CERTS, f"{len(cert_lines)} certs excedem {MAX_CERTS}"
+        # Projetos limitados
+        proj_lines = [l for l in md.split("\n") if l.startswith("- **Proj ")]
+        assert len(proj_lines) <= MAX_PROJECTS, f"{len(proj_lines)} projetos excedem {MAX_PROJECTS}"
+        # Cargos limitados
+        role_lines = [l for l in md.split("\n") if l.startswith("### **")]
+        assert len(role_lines) <= MAX_ROLES, f"{len(role_lines)} cargos excedem {MAX_ROLES}"

@@ -10,13 +10,21 @@ Skill para o pipeline de Job Application Workflow. Consome ferramentas MCP (Chro
 
 **Spec de referência:** `docs/spec/job-application-workflow.spec.md`
 
+**Versão:** 1.6.0
+**Última Atualização:** 2026-07-21
+**Autor:** Nexus Orquestrador
+
 ---
 
 ## Capacidades
 - **Busca Multi-plataforma:** LinkedIn (Chrome MCP), Glassdoor/Indeed/Monster (Playwright MCP)
-- **Análise de Compatibilidade:** Match score via Ollama + heurística
+- **Análise de Compatibilidade:** Match score via Ollama + heurística com identificação de strengths/gaps
 - **Consolidação de Currículos:** Multi-PDF → Knowledge Base .md completa + DOCX ATS
-- **Geração Contextualizada:** Currículo adaptado (Markdown → DOCX) + carta de apresentação (TXT)
+- **Geração Contextualizada:** Currículo adaptado à vaga (Markdown → DOCX → PDF) + carta de apresentação (TXT)
+  - Resumo profissional adaptado via Ollama ou fallback inteligente
+  - Habilidades filtradas por relevância com a vaga
+  - Experiências selecionadas por pertinência
+  - Certificações e projetos mais relevantes
 - **Aplicação Semiautomática:** Revisão humana + submissão via MCPs
 - **Desduplicação e Rastreamento:** Notion/JSONL + histórico
 
@@ -27,8 +35,13 @@ Skill para o pipeline de Job Application Workflow. Consome ferramentas MCP (Chro
 - O usuário precisa analisar compatibilidade entre currículo e vagas (match score)
 - O usuário quer consolidar PDFs de currículo em Knowledge Base .md (fonte de verdade)
 - O usuário precisa gerar currículo adaptado + carta de apresentação para uma vaga específica
+  - **Importante:** O currículo é adaptado à vaga, não apenas copiado do perfil
+  - Habilidades, experiências e projetos são filtrados por relevância
+  - Resumo profissional é contextualizado para a vaga
 - O usuário quer aplicar para vagas com revisão humana
 - O usuário precisa rastrear histórico de candidaturas
+- O usuário quer verificar match score antes de gerar materiais adaptados (match score > 70% necessário)
+- O usuário quer gerar currículos adaptados apenas para vagas com alta compatibilidade
 
 ## Quando NÃO Usar Esta Skill
 - O usuário quer navegar na web em geral (use agent-browser ou playwright-agent)
@@ -60,12 +73,16 @@ Skill para o pipeline de Job Application Workflow. Consome ferramentas MCP (Chro
 | Artefato | Localização | Gerado por |
 |----------|-------------|------------|
 | Knowledge Base (.md) | `data/job-apply-agent/<slug>-kb-<YYYY-MM-DD>.md` | `/job-kb`, `/job-consolidate` |
-| Currículo adaptado (MD + DOCX) | `data/job-apply-agent/<vaga_id>/resume_adapted.{md,docx}` | `/job-adapt` |
+| Currículo adaptado (MD) | `data/job-apply-agent/<vaga_id>/resume_adapted.md` | `/job-adapt` |
+| Currículo adaptado (DOCX) | `data/job-apply-agent/<vaga_id>/resume_adapted.docx` | `/job-adapt` |
+| Currículo adaptado (PDF) | `data/job-apply-agent/<vaga_id>/resume_adapted.pdf` | `/job-adapt` |
 | Carta de apresentação (TXT) | `data/job-apply-agent/<vaga_id>/cover_letter.txt` | `/job-adapt` |
 | DOCX ATS | `data/job-apply-agent/<slug>-ats-<YYYY-MM-DD>.docx` | `/job-consolidate` |
 | Perfil estruturado | `data/job-apply-agent/<slug>-profile.json` | `/job-consolidate`, `/job-kb --json` |
 
-> **Regra:** Se o diretório não existir, criá-lo automaticamente. Se o código atual salvar em outro local (ex: `~/.job-apply-agent/`), mover o arquivo para `data/job-apply-agent/` ao final da execução.
+> **Regra:** Se o diretório não existir, criá-lo automaticamente.
+> 
+> **Nota:** O diretório `~/.job-apply-agent/` é usado para arquivos de estado temporários (`profile.json`, `search_results.json`, `analyzed_results.json`, logs de aplicação).
 
 ---
 
@@ -85,18 +102,19 @@ PDF(s)
        │                                                       │
        ▼                                                       │
   /job-analyze → analyzed_results.json (match score 0-100%)    │
-       │                                                       │
+       │           (com strengths e gaps)                      │
        ▼                                                       ▼
-  /job-adapt [vaga_id] → resume_adapted.md ──→ resume_adapted.docx
-       │                      (Markdown)    MD→DOCX  (DOCX final)
-       │
-       ├── cover_letter.txt
-       │
-       ▼
-  /job-apply [vaga_id] → applied.jsonl (ou skipped.jsonl)
-       │
-       ▼
-  /job-track → listagem | export CSV/JSON | update status
+  /job-adapt [vaga_id] → data/job-apply-agent/<vaga_id>/      │
+       │                  ├── resume_adapted.md (editável)     │
+       │                  ├── resume_adapted.docx (DOCX final) │
+       │                  ├── resume_adapted.pdf (PDF final)   │
+       │                  └── cover_letter.txt (carta)         │
+       │                                                       │
+       ▼                                                       │
+  /job-apply [vaga_id] → applied.jsonl (ou skipped.jsonl)     │
+       │                                                       │
+       ▼                                                       │
+  /job-track → listagem | export CSV/JSON | update status      │
 ```
 
 ### Dependências entre Comandos
@@ -206,10 +224,15 @@ ollama serve && ollama pull llama3.1:8b
 - [ ] `[texto](url)` para hyperlinks (GitHub, LinkedIn)
 - [ ] `- ` para bullet points de responsabilidades e skills
 - [ ] Seções decididas dinamicamente por `_build_section_list()`
+- [ ] **Resumo adaptado à vaga** (não apenas copiado do perfil)
+- [ ] **Habilidades filtradas por relevância** com a vaga
+- [ ] **Experiências selecionadas por pertinência** com a vaga
+- [ ] **Certificações e projetos mais relevantes** para a vaga
 
 ### Para TXT de carta de apresentação
 - [ ] UTF-8, texto plano sem formatação
 - [ ] Contém: dados do candidato, data, referência da vaga, corpo, despedida
+- [ ] **Carta contextualizada** com a vaga e o candidato
 
 ### Para Match Score
 - [ ] Calculado via Ollama com fallback heurístico automático
@@ -277,7 +300,7 @@ A função `_build_section_list(profile, job)` decide dinamicamente quais seçõ
 
 ---
 
-## Lições Aprendidas (v1.0.0 → v1.3.0)
+## Lições Aprendidas (v1.0.0 → v1.5.0)
 
 ### Parser de PDF — Limitações Conhecidas
 Baseado em auditoria real com PDF de 6 páginas contendo 2 versões de currículo:
@@ -308,6 +331,12 @@ Se `/job-kb` produzir uma KB onde:
 → **Disparar revisão manual** + registrar no log como `quality:fail`
 → Considerar reprocessar com flags `--repair` (tenta re-parse)
 
+### Adapt vs. Copiar
+- **Problema:** Usuários relatam que currículo gerado é apenas cópia do perfil
+- **Causa:** Fallback simples sem adaptação quando Ollama indisponível
+- **Solução:** Implementar `_build_smart_summary()` e `_filter_by_relevance()`
+- **Resultado:** Resumo adaptado, habilidades/experiências filtradas por relevância
+
 ### Formato de Saída — MD → DOCX (v1.4.0)
 - **Currículo adaptado:** Gerado primeiro em **Markdown** (`.md`) com formatação rica, depois convertido para **DOCX** (`.docx`)
   - Markdown intermediário permite edição manual e versionamento
@@ -335,8 +364,9 @@ Se `/job-kb` produzir uma KB onde:
 | 1.1.0 | 2026-06-16 | Nexus Orquestrador | Adicionado sanity checks, lições aprendidas, limitações do parser, detecção de multi-curriculo, suporte a emoji |
 | 1.2.0 | 2026-06-16 | Nexus Orquestrador | Regra unificada: TODOS os artefatos salvos em `data/job-apply-agent/` |
 | 1.3.0 | 2026-06-17 | Nexus Orquestrador | Currículo DOCX em vez de PDF (python-docx); Carta TXT em vez de PDF; removido fpdf2 da geração principal |
-| 1.5.0 | 2026-06-24 | Nexus Orquestrador | Adicionado Regra de Ouro KB (nunca simplificar); Notion Tracking migrado para banco VagasTracking com propriedades estruturadas |
 | 1.4.0 | 2026-06-17 | Nexus Orquestrador | **Markdown-first pipeline**: currículo gerado em MD → convertido para DOCX; seções dinâmicas via `_build_section_list`; parser MD→DOCX com suporte a headers, bold, hyperlinks, bullets; `_add_hyperlink` com fallback seguro; `generator.py` v3.0.0 |
+| 1.5.0 | 2026-06-24 | Nexus Orquestrador | Adicionado Regra de Ouro KB (nunca simplificar); Notion Tracking migrado para banco VagasTracking com propriedades estruturadas |
+| 1.6.0 | 2026-07-21 | Nexus Orquestrador | **Melhoria na adaptação**: resumo profissional adaptado via `_build_smart_summary()`; habilidades/experiências filtradas por relevância; atualização de caminhos dos arquivos; documentação da lógica de adaptação |
 
 ## Notion Tracking — Banco de Dados VagasTracking
 

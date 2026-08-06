@@ -1,11 +1,12 @@
 """
 Módulo de Geração Contextualizada (REQ-005).
 
-Gera currículo adaptado à vaga (DOCX + MD) e carta de apresentação (TXT)
+Gera currículo adaptado à vaga (DOCX + PDF + MD) e carta de apresentação (TXT)
 usando Ollama para conteúdo contextualizado com fallback para templates.
 
-v3.0.0: Markdown-first resume pipeline — gera .md e converte para .docx
+v4.0.0: Markdown-first resume pipeline — gera .md e converte para .docx e .pdf
          com formatação rica (negrito, itálico, hyperlinks, bullet points).
+         PDF com limite de 2 páginas via fpdf2.
 """
 import datetime
 import json
@@ -22,10 +23,88 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.oxml.shared import OxmlElement
 
+from fpdf import FPDF
+
 from src.job_apply_agent.config import OLLAMA_URL, OLLAMA_MODEL, PROFILE_DIR
 from src.job_apply_agent.analyzer import _call_ollama
 
 logger = logging.getLogger(__name__)
+
+
+# ─── Orçamento de tamanho ATS (critérios de 1-2 páginas) ──────────────────────
+# Currículos devem ser condensados e direcionados à vaga. Estes limites evitam
+# o estouro para 3+ páginas incluindo todo o histórico do candidato.
+MAX_SKILLS = 8           # máx. de skills relevantes exibidas
+MAX_CERTS = 2            # máx. de certificações relevantes
+MAX_PROJECTS = 1         # máx. de projetos exibidos
+MAX_BULLETS_PER_ROLE = 2 # máx. de bullets por experiência
+MAX_ROLES = 2            # máx. de experiências (mantém as mais relevantes)
+
+_STOPWORDS = {
+    "de", "da", "do", "das", "dos", "e", "ou", "com", "para", "em", "na", "no",
+    "nas", "nos", "por", "que", "a", "o", "as", "os", "um", "uma", "você", "se",
+    "the", "and", "with", "for", "to", "of", "in", "on", "at", "is", "are", "via",
+    "using", "use", "como", "ser", "são", "foi", "tem", "suas", "seus", "candidato",
+}
+
+
+def _extract_job_keywords(job: dict) -> set[str]:
+    """
+    Extrai conjunto de tokens relevantes da vaga para pontuar relevância.
+
+    Combina título, descrição, requisitos obrigatórios, stack e strengths, ignorando
+    stopwords e tokens curtos.
+    """
+    texts: list[str] = []
+    texts.append(str(job.get("title", "")))
+    texts.append(str(job.get("description", "")))
+    reqs = job.get("requirements")
+    if isinstance(reqs, dict):
+        texts.extend(str(r) for r in reqs.get("mandatory", []))
+        texts.extend(str(r) for r in reqs.get("nice_to_have", []))
+    elif isinstance(reqs, (list, tuple)):
+        texts.extend(str(r) for r in reqs)
+    # Adiciona stack da vaga (importante para filtering)
+    stack = job.get("stack", [])
+    if isinstance(stack, (list, tuple)):
+        texts.extend(str(s) for s in stack)
+    texts.extend(str(s) for s in job.get("strengths", []))
+    texts.extend(str(g) for g in job.get("gaps", []))
+
+    tokens: set[str] = set()
+    for text in texts:
+        for tok in re.split(r"[^a-zA-ZÀ-ÿ0-9+#.]+", text.lower()):
+            tok = tok.strip()
+            if len(tok) >= 3 and tok not in _STOPWORDS:
+                tokens.add(tok)
+    return tokens
+
+
+def _relevance_score(text: str, keywords: set[str]) -> int:
+    """Conta quantos keywords da vaga aparecem no texto informado."""
+    if not keywords:
+        return 0
+    lowered = text.lower()
+    return sum(1 for kw in keywords if kw in lowered)
+
+
+def _filter_by_relevance(
+    items: list, keywords: set[str], max_n: int, text_fn=lambda x: str(x)
+) -> list:
+    """
+    Retorna os ``max_n`` itens mais relevantes para a vaga.
+
+    Itens com mesma pontuação preservam a ordem original (estável). Se não
+    houver keywords, retorna os ``max_n`` primeiros.
+    """
+    if not items:
+        return []
+    if not keywords:
+        return items[:max_n]
+    scored = sorted(
+        items, key=lambda it: _relevance_score(text_fn(it), keywords), reverse=True
+    )
+    return scored[:max_n]
 
 
 # ─── Templates de carta ──────────────────────────────────────────────────────
@@ -381,8 +460,10 @@ def _build_smart_summary(profile: dict, job: dict) -> str:
     if not strengths:
         return base_summary
 
-    # Constrói adapted_summary: adiciona ênfase nas strengths
-    strengths_text = ", ".join(s.title() for s in strengths[:4])
+    # Constrói adapted_summary: adiciona ênfase nas strengths.
+    # Usa o texto original das strengths (já são frases legíveis) em vez de
+    # .title(), que quebra a capitalização de termos técnicos (ex: "Node.js").
+    strengths_text = "; ".join(s.strip() for s in strengths[:4])
 
     # Identifica o "foco" da vaga a partir do título
     focus_areas = {
@@ -426,9 +507,9 @@ def _build_smart_summary(profile: dict, job: dict) -> str:
             adapted += base_summary
         return adapted.strip()
 
-    # Fallback: se não achou foco, usa base_summary + strengths
+    # Fallback: se não achou foco, usa base_summary + strengths de forma fluida
     if base_summary:
-        return f"{base_summary} Destaque em: {strengths_text}."
+        return f"{base_summary.rstrip('.')}. Principais competências alinhadas à vaga: {strengths_text}."
     return f"Profissional de TI com experiência em {strengths_text}."
 
 
@@ -475,11 +556,16 @@ def _build_resume_markdown(profile: dict, job: dict) -> str:
         elif key == "skills":
             skills = profile.get("skills", [])
             if skills:
+                # Mantém apenas as skills mais relevantes para a vaga (ATS: 1-2 páginas)
+                job_kw = _extract_job_keywords(job)
+                relevant = _filter_by_relevance(skills, job_kw, MAX_SKILLS)
+                # Preserva a ordem original do perfil entre as selecionadas
+                seen = set(id(s) for s in relevant)
+                ordered = [s for s in skills if id(s) in seen][:MAX_SKILLS]
+                if not ordered:
+                    ordered = skills[:MAX_SKILLS]
                 lines.append(f"## {sec['name']}")
-                # Agrupa 4-5 skills por bullet
-                grouped = [
-                    skills[i : i + 5] for i in range(0, len(skills), 5)
-                ]
+                grouped = [ordered[i : i + 5] for i in range(0, len(ordered), 5)]
                 for group in grouped:
                     lines.append(f"- {', '.join(group)}")
                 lines.append("")
@@ -489,60 +575,79 @@ def _build_resume_markdown(profile: dict, job: dict) -> str:
             # PRIORIDADE: usar experience_raw (com bullets preservados)
             exp_raw = profile.get("experience_raw", "")
             exp_text = profile.get("experience", "")
+            job_kw = _extract_job_keywords(job)
+
+            def _render_role(header: str, bullets: list[str]) -> None:
+                """Renderiza um cargo com cabeçalho e no máx. MAX_BULLETS_PER_ROLE bullets."""
+                if header:
+                    m = re.match(
+                        r"^(.+?)\s+(?:na|no|em|–|-)\s+(.+?)\s*\(([^)]+)\)\s*$",
+                        header, re.UNICODE,
+                    )
+                    if m:
+                        lines.append(
+                            f"### **{m.group(1).strip()}** | {m.group(2).strip()} | {m.group(3).strip()}"
+                        )
+                    else:
+                        lines.append(f"### {header}")
+                for detail_line in bullets[:MAX_BULLETS_PER_ROLE]:
+                    detail_line = detail_line.strip().lstrip("•- \t")
+                    if detail_line:
+                        lines.append(f"- {detail_line}")
 
             if exp_raw and "•" in exp_raw:
                 # Parse do formato raw com bullets
-                lines.append(f"## {sec['name']}")
                 blocks = exp_raw.strip().split("\n\n")
+                parsed = []
                 for block in blocks:
                     block = block.strip()
                     if not block:
                         continue
                     lines_in_block = block.split("\n")
-                    # Primeira linha = cabeçalho da experiência
                     header = lines_in_block[0].strip()
-                    if header:
-                        m = re.match(
-                            r"^(.+?)\s+(?:na|no|em|–|-)\s+(.+?)\s*\(([^)]+)\)\s*$",
-                            header, re.UNICODE,
-                        )
-                        if m:
-                            lines.append(
-                                f"### **{m.group(1).strip()}** | {m.group(2).strip()} | {m.group(3).strip()}"
-                            )
-                        else:
-                            lines.append(f"### {header}")
-                    # Demais linhas = bullets
-                    for detail_line in lines_in_block[1:]:
-                        detail_line = detail_line.strip().lstrip("•- \t")
-                        if detail_line:
-                            lines.append(f"- {detail_line}")
-                lines.append("")
+                    bullets = [
+                        b.strip().lstrip("•- \t")
+                        for b in lines_in_block[1:]
+                        if b.strip().lstrip("•- \t")
+                    ]
+                    parsed.append((header, bullets))
+                # Mantém apenas os MAX_ROLES cargos mais relevantes para a vaga
+                if len(parsed) > MAX_ROLES:
+                    parsed = _filter_by_relevance(
+                        parsed, job_kw, MAX_ROLES,
+                        text_fn=lambda pb: f"{pb[0]} {' '.join(pb[1])}",
+                    )
+                if parsed:
+                    lines.append(f"## {sec['name']}")
+                    for header, bullets in parsed:
+                        _render_role(header, bullets)
+                    lines.append("")
             elif exp_text:
                 # Fallback: usa o texto normalizado
-                lines.append(f"## {sec['name']}")
                 entries = _parse_experience_entries(exp_text)
-                for entry in entries:
-                    role = entry.get("role", "")
-                    company = entry.get("company", "")
-                    period = entry.get("period", "")
-                    details = entry.get("details", "")
-
-                    if role and company:
-                        lines.append(
-                            f"### **{role}** | {company} | {period}"
-                        )
-                    elif role:
-                        lines.append(f"### **{role}** | {period}")
-                    # Responsibilities
-                    if details:
-                        # Only split on ". " followed by capital letter (sentence boundaries)
-                        # DO NOT split on commas as that breaks parenthesized lists
-                        items = re.split(r"\.\s+(?=[A-ZÀ-Ú])", details)
-                        items = [i.strip() for i in items if i.strip()]
-                        for item in items:
-                            lines.append(f"- {item.rstrip('.')}")
-                lines.append("")
+                if len(entries) > MAX_ROLES:
+                    entries = _filter_by_relevance(
+                        entries, job_kw, MAX_ROLES,
+                        text_fn=lambda e: f"{e.get('role','')} {e.get('details','')}",
+                    )
+                if entries:
+                    lines.append(f"## {sec['name']}")
+                    for entry in entries:
+                        role = entry.get("role", "")
+                        company = entry.get("company", "")
+                        period = entry.get("period", "")
+                        details = entry.get("details", "")
+                        header = ""
+                        if role and company:
+                            header = f"{role} | {company} | {period}"
+                        elif role:
+                            header = f"{role} | {period}"
+                        bullets = []
+                        if details:
+                            items = re.split(r"\.\s+(?=[A-ZÀ-Ú])", details)
+                            bullets = [i.strip().rstrip(".") for i in items if i.strip()]
+                        _render_role(header, bullets)
+                    lines.append("")
 
         # ── Formação Acadêmica ────────────────────────────────────────────
         elif key == "education":
@@ -579,35 +684,51 @@ def _build_resume_markdown(profile: dict, job: dict) -> str:
         # ── Certificações ────────────────────────────────────────────────
         elif key == "certifications":
             certs = profile.get("certifications", [])
-            lines.append(f"## {sec['name']}")
             if isinstance(certs, list):
+                # Mantém apenas as MAX_CERTS mais relevantes para a vaga
+                job_kw = _extract_job_keywords(job)
+                certs = _filter_by_relevance(certs, job_kw, MAX_CERTS, text_fn=str)
+            else:
+                certs = [certs]
+            if certs:
+                lines.append(f"## {sec['name']}")
                 for c in certs:
                     lines.append(f"- {c}")
-            else:
-                lines.append(f"- {certs}")
-            lines.append("")
+                lines.append("")
 
         # ── Projetos ─────────────────────────────────────────────────────
         elif key == "projects":
             projs = profile.get("projects", [])
-            lines.append(f"## {sec['name']}")
             if isinstance(projs, list):
+                # Mantém apenas os MAX_PROJECTS mais relevantes para a vaga
+                job_kw = _extract_job_keywords(job)
+                projs = _filter_by_relevance(
+                    projs, job_kw, MAX_PROJECTS,
+                    text_fn=lambda p: (
+                        f"{p.get('name','')} {p.get('description','')}"
+                        if isinstance(p, dict) else str(p)
+                    ),
+                )
+            else:
+                projs = [projs]
+            if projs:
+                lines.append(f"## {sec['name']}")
                 for p in projs:
                     if isinstance(p, dict):
                         name_p = p.get("name", "")
                         desc_p = p.get("description", "")
                         link_p = p.get("link", "")
-                        line = f"- **{name_p}**"
+                        # Nome do projeto como H3
+                        lines.append(f"### **{name_p}**")
+                        # Descrição completa como bullet
                         if desc_p:
-                            line += f": {desc_p}"
+                            lines.append(f"- {desc_p}")
+                        # Link se existir
                         if link_p:
-                            line += f" ([link]({link_p}))"
-                        lines.append(line)
+                            lines.append(f"- Link: {link_p}")
                     else:
                         lines.append(f"- {p}")
-            else:
-                lines.append(f"- {projs}")
-            lines.append("")
+                lines.append("")
 
         # ── Links ────────────────────────────────────────────────────────
         elif key == "links":
@@ -616,11 +737,11 @@ def _build_resume_markdown(profile: dict, job: dict) -> str:
             linkedin = profile.get("linkedin", "")
             portfolio = profile.get("portfolio", "")
             if github:
-                lines.append(f"- [GitHub]({github})")
+                lines.append(f"- GitHub: {github}")
             if linkedin:
-                lines.append(f"- [LinkedIn]({linkedin})")
+                lines.append(f"- LinkedIn: {linkedin}")
             if portfolio:
-                lines.append(f"- [Portfolio]({portfolio})")
+                lines.append(f"- Portfolio: {portfolio}")
             lines.append("")
 
     return "\n".join(lines)
@@ -734,7 +855,162 @@ def _md_to_docx(md_text: str) -> Document:
     return doc
 
 
-# ─── Geração de currículo adaptado (DOCX + MD) ──────────────────────────────
+# ─── Conversão Markdown → PDF ───────────────────────────────────────────────
+
+
+class _ResumePDF(FPDF):
+    """Classe PDF personalizada para currículos com formatação ATS-friendly."""
+
+    def __init__(self):
+        super().__init__()
+        self.set_auto_page_break(auto=True, margin=15)
+        # Adiciona fonte Unicode para caracteres especiais
+        self.add_font("DejaVu", "", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", uni=True)
+        self.add_font("DejaVu", "B", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", uni=True)
+        # Usa fonte regular para itálico (fallback seguro)
+        self.add_font("DejaVu", "I", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", uni=True)
+        self.add_font("DejaVu", "BI", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", uni=True)
+
+    def header(self):
+        pass
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font("DejaVu", "I", 8)
+        self.set_text_color(128, 128, 128)
+        self.cell(0, 10, f"Página {self.page_no()}/{{nb}}", 0, 0, "C")
+
+
+def _md_to_pdf(md_text: str, output_path: Path, max_pages: int = 2) -> Path:
+    """
+    Converte string Markdown em PDF formatado para ATS.
+
+    Args:
+        md_text: Conteúdo Markdown do currículo
+        output_path: Caminho do arquivo PDF de saída
+        max_pages: Número máximo de páginas (padrão: 2)
+
+    Returns:
+        Path do arquivo PDF gerado
+    """
+    pdf = _ResumePDF()
+    pdf.alias_nb_pages()
+    pdf.add_page()
+    pdf.set_margins(15, 15, 15)
+
+    lines = md_text.split("\n")
+    i = 0
+    after_h1 = False
+
+    while i < len(lines):
+        raw = lines[i]
+        stripped = raw.strip()
+
+        # Verifica se excedeu o limite de páginas
+        if pdf.page_no() > max_pages:
+            break
+
+        # ── Linha vazia ──────────────────────────────────────────────────
+        if not stripped:
+            pdf.ln(2)
+            i += 1
+            continue
+
+        # ── H1 — Nome ────────────────────────────────────────────────────
+        if stripped.startswith("# ") and not stripped.startswith("## "):
+            text = stripped[2:]
+            pdf.set_font("DejaVu", "B", 14)
+            pdf.set_text_color(0, 0, 0)
+            pdf.multi_cell(0, 8, text, 0, "C")
+            pdf.ln(2)
+            after_h1 = True
+            i += 1
+            continue
+
+        # ── H2 — Seção ───────────────────────────────────────────────────
+        if stripped.startswith("## ") and not stripped.startswith("### "):
+            text = stripped[3:].upper()
+            pdf.set_font("DejaVu", "B", 11)
+            pdf.set_text_color(0, 0, 0)
+            pdf.ln(4)
+            pdf.multi_cell(0, 6, text, 0, "L")
+            pdf.line(15, pdf.get_y(), 195, pdf.get_y())
+            pdf.ln(2)
+            after_h1 = False
+            i += 1
+            continue
+
+        # ── H3 — Sub-seção ───────────────────────────────────────────────
+        if stripped.startswith("### "):
+            text = stripped[4:]
+            pdf.set_font("DejaVu", "BI", 10)
+            pdf.set_text_color(0, 0, 0)
+            # Remove formatação Markdown para PDF
+            clean_text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+            pdf.multi_cell(0, 5, clean_text, 0, "L")
+            pdf.ln(1)
+            after_h1 = False
+            i += 1
+            continue
+
+        # ── Linha de contato (após H1) ───────────────────────────────────
+        if after_h1 or ("@" in stripped and "|" in stripped):
+            pdf.set_font("DejaVu", "", 9)
+            pdf.set_text_color(80, 80, 80)
+            # Remove formatação Markdown para PDF
+            clean_text = re.sub(r"\*\*(.+?)\*\*", r"\1", stripped)
+            clean_text = re.sub(r"\[(.+?)\]\((.+?)\)", r"\1", clean_text)
+            pdf.multi_cell(0, 4, clean_text, 0, "C")
+            pdf.ln(2)
+            after_h1 = False
+            i += 1
+            continue
+
+        # ── Bullet point ─────────────────────────────────────────────────
+        if stripped.startswith("- "):
+            text = stripped[2:]
+            pdf.set_font("DejaVu", "", 9.5)
+            pdf.set_text_color(0, 0, 0)
+            # Remove formatação Markdown para PDF
+            clean_text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+            clean_text = re.sub(r"\[(.+?)\]\((.+?)\)", r"\1", clean_text)
+            # Usa multi_cell para bullets com wrap adequado
+            bullet_text = f"• {clean_text}"
+            pdf.set_x(20)  # Indentação para bullets
+            pdf.multi_cell(175, 4, bullet_text, 0, "L")
+            pdf.ln(1)
+            i += 1
+            continue
+
+        # ── Parágrafo normal ─────────────────────────────────────────────
+        pdf.set_font("DejaVu", "", 9.5)
+        pdf.set_text_color(0, 0, 0)
+        # Remove formatação Markdown e renderiza com wrap
+        clean_text = re.sub(r"\*\*(.+?)\*\*", r"\1", stripped)
+        clean_text = re.sub(r"\[(.+?)\]\((.+?)\)", r"\1", clean_text)
+        pdf.multi_cell(0, 4, clean_text, 0, "L")
+        pdf.ln(2)
+        after_h1 = False
+        i += 1
+
+    pdf.output(str(output_path))
+    return output_path
+
+
+def _render_pdf_inline(pdf: FPDF, text: str, base_size: float):
+    """
+    Renderiza texto com formatação inline (**negrito**) no PDF.
+
+    Remove links [text](url) e mantém apenas o texto.
+    """
+    # Remove links e mantém apenas texto
+    text = re.sub(r"\[(.+?)\]\((.+?)\)", r"\1", text)
+    # Remove formatação de negrito para PDF (fpdf2 não suporta inline bold facilmente)
+    clean_text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+    pdf.multi_cell(0, 4, clean_text, 0, "L")
+
+
+# ─── Geração de currículo adaptado (DOCX + PDF + MD) ────────────────────────
 
 
 def _content_to_docx(text: str, title: str = "Resume") -> Document:
@@ -780,17 +1056,18 @@ def _content_to_docx(text: str, title: str = "Resume") -> Document:
     return doc
 
 
-def generate_adapted_resume(profile: dict, job: dict, output_dir: Path) -> dict:
+def generate_adapted_resume(profile: dict, job: dict, output_dir: Path, max_pages: int = 2) -> dict:
     """
-    Gera currículo adaptado à vaga nos formatos MD e DOCX.
+    Gera currículo adaptado à vaga nos formatos MD, DOCX e PDF.
 
     Args:
         profile: Perfil do candidato (profile.json)
         job: Vaga alvo (com score, gaps, strengths)
         output_dir: Diretório de saída
+        max_pages: Número máximo de páginas para o PDF (padrão: 2)
 
     Returns:
-        dict com ``docx_path`` e ``md_path``.
+        dict com ``docx_path``, ``pdf_path`` e ``md_path``.
     """
     md_text = _build_resume_markdown(profile, job)
 
@@ -812,7 +1089,12 @@ def generate_adapted_resume(profile: dict, job: dict, output_dir: Path) -> dict:
     doc.save(str(docx_path))
     logger.info(f"Currículo adaptado (DOCX) salvo: {docx_path}")
 
-    return {"docx_path": docx_path, "md_path": md_path}
+    # Converte para PDF (com limite de páginas)
+    pdf_path = output_dir / "resume_adapted.pdf"
+    _md_to_pdf(md_text, pdf_path, max_pages=max_pages)
+    logger.info(f"Currículo adaptado (PDF) salvo: {pdf_path}")
+
+    return {"docx_path": docx_path, "pdf_path": pdf_path, "md_path": md_path}
 
 
 # ─── Geração de carta de apresentação (TXT) ──────────────────────────────────
@@ -867,25 +1149,27 @@ def generate_cover_letter(profile: dict, job: dict, output_dir: Path) -> Path:
 # ─── Orquestração ────────────────────────────────────────────────────────────
 
 
-def generate_application(profile: dict, job: dict, output_dir: Path) -> dict:
+def generate_application(profile: dict, job: dict, output_dir: Path, max_pages: int = 2) -> dict:
     """
-    Pipeline completo de geração: currículo adaptado (MD + DOCX) + carta (TXT).
+    Pipeline completo de geração: currículo adaptado (MD + DOCX + PDF) + carta (TXT).
 
     Args:
         profile: Perfil do candidato
         job: Vaga alvo (enriquecida com análise)
         output_dir: Diretório de saída
+        max_pages: Número máximo de páginas para o PDF (padrão: 2)
 
     Returns:
         dict com ``resume_path`` (DOCX, compatibilidade), ``resume_docx``,
-        ``resume_md`` e ``cover_letter_path``.
+        ``resume_pdf``, ``resume_md`` e ``cover_letter_path``.
     """
-    resume_result = generate_adapted_resume(profile, job, output_dir)
+    resume_result = generate_adapted_resume(profile, job, output_dir, max_pages=max_pages)
     letter_path = generate_cover_letter(profile, job, output_dir)
 
     return {
         "resume_path": str(resume_result["docx_path"]),
         "resume_docx": str(resume_result["docx_path"]),
+        "resume_pdf": str(resume_result["pdf_path"]),
         "resume_md": str(resume_result["md_path"]),
         "cover_letter_path": str(letter_path),
     }
@@ -895,33 +1179,37 @@ def generate_application(profile: dict, job: dict, output_dir: Path) -> dict:
 
 def validate_resume_completeness(md_text: str, profile: dict) -> list[str]:
     """
-    Verifica se o currículo gerado contém todos os campos do perfil.
+    Verifica se o currículo gerado contém os campos essenciais do perfil.
+
+    Como o padrão ATS agora filtra skills/certificações/projetos menos
+    relevantes para a vaga (intencionalmente), esta validação NÃO exige que
+    todo o conteúdo do perfil apareça — apenas a presença das seções
+    estruturais obrigatórias e das skills mais relevantes.
 
     Returns:
-        Lista de warnings (vazia se completo).
+        Lista de warnings (vazia se completo o suficiente).
     """
     warnings_list = []
 
-    # Skills
-    for skill in profile.get("skills", []):
-        if skill not in md_text:
-            warnings_list.append(f"Skill ausente: {skill}")
-            break  # Uma skill ausente já é indicativo suficiente
+    # Seções estruturais obrigatórias
+    if "## Resumo Profissional" not in md_text:
+        warnings_list.append("Seção 'Resumo Profissional' ausente")
+    if "## Experiência Profissional" not in md_text:
+        warnings_list.append("Seção 'Experiência Profissional' ausente")
+    if "## Habilidades" not in md_text and "## Habilidades Técnicas" not in md_text:
+        warnings_list.append("Seção 'Habilidades' ausente")
 
-    # Projetos
-    for proj in profile.get("projects", []):
-        if isinstance(proj, dict) and proj.get("name", "") not in md_text:
-            warnings_list.append(f"Projeto ausente: {proj.get('name')}")
+    # Pelo menos uma skill relevante deve aparecer
+    skills = profile.get("skills", [])
+    if skills and not any(s in md_text for s in skills[:MAX_SKILLS]):
+        warnings_list.append("Nenhuma skill do perfil encontrada no currículo")
 
-    # Certificações
-    for cert in profile.get("certifications", []):
-        if isinstance(cert, str) and cert.split("|")[0].strip() not in md_text:
-            warnings_list.append(f"Certificação ausente: {cert[:40]}")
-
-    # Idiomas
+    # Idiomas (se informados) — aceita string (split por vírgula) ou lista
     langs = profile.get("languages", "")
-    if langs and not any(lang.strip() in md_text for lang in langs.split(",")):
-        warnings_list.append("Idiomas não encontrados no currículo")
+    if langs:
+        lang_items = langs.split(",") if isinstance(langs, str) else list(langs)
+        if not any(str(lang).strip() in md_text for lang in lang_items):
+            warnings_list.append("Idiomas não encontrados no currículo")
 
     # Experience_raw vs md
     exp_raw = profile.get("experience_raw", "")

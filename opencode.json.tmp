@@ -1,7 +1,0 @@
-    ,
-    "opensre": {
-      "description": "Investigação de incidentes com OpenSRE (RCA automatizada)",
-      "template": "{file:.opencode/commands/opensre.md}\n\n$ARGUMENTS",
-      "agent": "orchestrator",
-      "subtask": true
-    }

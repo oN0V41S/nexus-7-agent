@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 
 /**
- * Nexus Google Workspace MCP Server
+ * Google Workspace MCP Server
+ * Proxy stdio → HTTP para APIs do Google Workspace (Drive, Docs, Sheets, Gmail)
  * 
- * Bridge between OpenCode (MCP stdio) and Google Workspace APIs.
- * Handles OAuth 2.0 authentication, token refresh, and exposes
- * Drive, Docs, Sheets, and Gmail tools.
+ * Autenticação: OAuth 2.0 com refresh token
+ * Tokens armazenados em: ~/.config/google-workspace-mcp/tokens.json
  */
 
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { createServer } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   CallToolRequestSchema,
@@ -16,446 +16,658 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { google } from "googleapis";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
-import { join, dirname } from "path";
+import { join } from "path";
 import { homedir } from "os";
-import { createServer } from "http";
+import { createInterface } from "readline";
 
-// ─── Configuration ────────────────────────────────────────────────────
-const CONFIG_DIR = join(homedir(), ".config", "nexus-google-mcp");
-const TOKEN_PATH = join(CONFIG_DIR, "token.json");
-const CREDENTIALS_PATH = join(CONFIG_DIR, "credentials.json");
+// ============================================================
+// Configuração
+// ============================================================
 
 const SCOPES = [
-  "https://www.googleapis.com/auth/drive.file",
-  "https://www.googleapis.com/auth/drive.readonly",
+  "https://www.googleapis.com/auth/drive",
   "https://www.googleapis.com/auth/documents",
   "https://www.googleapis.com/auth/spreadsheets",
+  "https://www.googleapis.com/auth/gmail.modify",
   "https://www.googleapis.com/auth/gmail.readonly",
-  "https://www.googleapis.com/auth/gmail.compose",
+  "https://www.googleapis.com/auth/gmail.send",
 ];
 
-// ─── Credential Management ────────────────────────────────────────────
+const TOKEN_DIR = join(homedir(), ".config", "google-workspace-mcp");
+const TOKEN_PATH = join(TOKEN_DIR, "tokens.json");
+const CREDENTIALS_PATH = join(TOKEN_DIR, "credentials.json");
+
+// ============================================================
+// Gerenciamento de Credenciais
+// ============================================================
 
 function loadCredentials() {
-  const raw = readFileSync(CREDENTIALS_PATH, "utf8");
-  return JSON.parse(raw);
-}
-
-function loadToken() {
-  if (!existsSync(TOKEN_PATH)) return null;
-  const raw = readFileSync(TOKEN_PATH, "utf8");
-  return JSON.parse(raw);
-}
-
-function saveToken(token) {
-  if (!existsSync(CONFIG_DIR)) mkdirSync(CONFIG_DIR, { recursive: true });
-  writeFileSync(TOKEN_PATH, JSON.stringify(token, null, 2));
-  console.error(`[nexus-google] Token saved to ${TOKEN_PATH}`);
-}
-
-// ─── OAuth 2.0 Authentication ─────────────────────────────────────────
-
-async function authenticate(credentials) {
-  const { client_id, client_secret, redirect_uris } = credentials.installed || credentials.web;
-  const redirectUri = redirect_uris?.[0] || "http://localhost:8080";
-
-  const oauth2Client = new google.auth.OAuth2(client_id, client_secret, redirectUri);
-
-  // Check if we have a stored token
-  const storedToken = loadToken();
-  if (storedToken) {
-    oauth2Client.setCredentials(storedToken);
-    
-    // Check if token is expired and refresh if possible
-    try {
-      const tokenInfo = await oauth2Client.getTokenInfo(
-        storedToken.access_token
-      ).catch(() => null);
-      
-      if (!tokenInfo) {
-        // Token might be expired, try refresh
-        try {
-          const { credentials: refreshed } = await oauth2Client.refreshAccessToken();
-          oauth2Client.setCredentials(refreshed);
-          saveToken(refreshed);
-          console.error("[nexus-google] Token refreshed successfully");
-        } catch {
-          console.error("[nexus-google] Token refresh failed, need re-auth");
-          return await doAuthFlow(oauth2Client, client_id, client_secret, redirectUri);
-        }
-      }
-    } catch {
-      // getTokenInfo failed, try refresh
-      try {
-        const { credentials: refreshed } = await oauth2Client.refreshAccessToken();
-        oauth2Client.setCredentials(refreshed);
-        saveToken(refreshed);
-        console.error("[nexus-google] Token refreshed successfully");
-      } catch {
-        return await doAuthFlow(oauth2Client, client_id, client_secret, redirectUri);
-      }
-    }
-    
-    return oauth2Client;
+  if (!existsSync(CREDENTIALS_PATH)) {
+    throw new Error(
+      `Credenciais não encontradas em: ${CREDENTIALS_PATH}\n` +
+      `Execute: node auth.mjs --setup para configurar.`
+    );
   }
-
-  // No stored token, do auth flow
-  return await doAuthFlow(oauth2Client, client_id, client_secret, redirectUri);
+  return JSON.parse(readFileSync(CREDENTIALS_PATH, "utf-8"));
 }
 
-async function doAuthFlow(oauth2Client, clientId, clientSecret, redirectUri) {
-  const authUrl = oauth2Client.generateAuthUrl({
-    access_type: "offline",
-    scope: SCOPES,
-    prompt: "consent",
-  });
-
-  console.error("\n╔══════════════════════════════════════════════════════════════╗");
-  console.error("║   Google Workspace MCP - Authentication Required            ║");
-  console.error("╠══════════════════════════════════════════════════════════════╣");
-  console.error("║   Abra esta URL no seu navegador:                          ║");
-  console.error(`║   ${authUrl}`);
-  console.error("║                                                            ║");
-  console.error("║   Após autorizar, cole o código de autorização aqui.       ║");
-  console.error("╚══════════════════════════════════════════════════════════════╝\n");
-
-  // Try to open browser automatically
-  try {
-    const open = (await import("open")).default;
-    await open(authUrl).catch(() => {});
-  } catch {
-    // open failed, user will need to open manually
+function loadTokens() {
+  if (!existsSync(TOKEN_PATH)) {
+    return null;
   }
+  return JSON.parse(readFileSync(TOKEN_PATH, "utf-8"));
+}
 
-  // Start a simple HTTP server to receive the redirect
-  const code = await new Promise((resolve, reject) => {
-    const server = createServer(async (req, res) => {
-      const url = new URL(req.url, `http://localhost:8080`);
-      const codeParam = url.searchParams.get("code");
-      
-      if (codeParam) {
-        res.writeHead(200, { "Content-Type": "text/html" });
-        res.end(`
-          <html><body>
-            <h1>✅ Autorizado!</h1>
-            <p>Você já pode fechar esta janela.</p>
-          </body></html>
-        `);
-        server.close();
-        resolve(codeParam);
-      } else {
-        res.writeHead(200, { "Content-Type": "text/html" });
-        res.end(`<html><body>Waiting for authorization...</body></html>`);
-      }
-    });
-    
-    server.listen(8080, () => {
-      console.error("[nexus-google] Listening for OAuth callback on http://localhost:8080");
-    });
-    
-    // Also support CLI paste if browser redirect doesn't work
-    // Timeout after 5 minutes if no code received via redirect
-    setTimeout(() => {
-      server.close();
-      resolve(null); // Will fall through to CLI prompt
-    }, 300000);
-  });
+function saveTokens(tokens) {
+  if (!existsSync(TOKEN_DIR)) {
+    mkdirSync(TOKEN_DIR, { recursive: true });
+  }
+  writeFileSync(TOKEN_PATH, JSON.stringify(tokens, null, 2));
+}
 
-  let finalCode = code;
+async function getAuthenticatedClient() {
+  const credentials = loadCredentials();
+  const { client_secret, client_id, redirect_uris } = credentials.installed || credentials.web;
   
-  // If HTTP server didn't get the code, prompt user to paste it
-  if (!finalCode) {
-    console.error("[nexus-google] Enter the authorization code from the browser:");
-    finalCode = await new Promise((resolve) => {
-      process.stdin.once("data", (data) => {
-        resolve(data.toString().trim());
-      });
-    });
+  const oAuth2Client = new google.auth.OAuth2(
+    client_id,
+    client_secret,
+    redirect_uris[0]
+  );
+
+  const tokens = loadTokens();
+  if (!tokens) {
+    throw new Error(
+      "Tokens não encontrados. Execute: node auth.mjs --authorize"
+    );
   }
 
-  const { tokens } = await oauth2Client.getToken(finalCode);
-  oauth2Client.setCredentials(tokens);
-  saveToken(tokens);
-  return oauth2Client;
+  oAuth2Client.setCredentials(tokens);
+
+  // Auto-refresh token se expirado
+  oAuth2Client.on("tokens", (newTokens) => {
+    const existing = loadTokens() || {};
+    saveTokens({ ...existing, ...newTokens });
+  });
+
+  return oAuth2Client;
 }
 
-// ─── Google API Wrappers ──────────────────────────────────────────────
+// ============================================================
+// Tools MCP
+// ============================================================
 
-class GoogleWorkspaceAPI {
-  constructor(auth) {
-    this.drive = google.drive({ version: "v3", auth });
-    this.docs = google.docs({ version: "v1", auth });
-    this.sheets = google.sheets({ version: "v4", auth });
-    this.gmail = google.gmail({ version: "v1", auth });
-  }
+const TOOLS = [
+  // Google Drive
+  {
+    name: "gdrive_list_files",
+    description: "Lista arquivos no Google Drive",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Query de busca (opcional)" },
+        pageSize: { type: "number", description: "Número de resultados (máx 100)", default: 10 },
+        pageToken: { type: "string", description: "Token para paginação" },
+      },
+    },
+  },
+  {
+    name: "gdrive_search",
+    description: "Busca arquivos no Google Drive por nome ou conteúdo",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Termo de busca" },
+        mimeType: { type: "string", description: "Filtrar por tipo MIME (ex: application/pdf)" },
+        pageSize: { type: "number", description: "Número de resultados", default: 10 },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "gdrive_read_file",
+    description: "Lê conteúdo de um arquivo do Google Drive (Google Docs, Sheets)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        fileId: { type: "string", description: "ID do arquivo no Drive" },
+        mimeType: { type: "string", description: "Tipo MIME para exportação" },
+      },
+      required: ["fileId"],
+    },
+  },
+  {
+    name: "gdrive_create_file",
+    description: "Cria um arquivo de texto no Google Drive",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Nome do arquivo" },
+        content: { type: "string", description: "Conteúdo do arquivo" },
+        mimeType: { type: "string", description: "Tipo MIME", default: "text/plain" },
+        folderId: { type: "string", description: "ID da pasta (opcional)" },
+      },
+      required: ["name", "content"],
+    },
+  },
+  {
+    name: "gdrive_upload_file",
+    description: "Faz upload de arquivo local para o Google Drive",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filePath: { type: "string", description: "Caminho do arquivo local" },
+        name: { type: "string", description: "Nome no Drive (opcional)" },
+        mimeType: { type: "string", description: "Tipo MIME (opcional)" },
+        folderId: { type: "string", description: "ID da pasta (opcional)" },
+      },
+      required: ["filePath"],
+    },
+  },
+  {
+    name: "gdrive_delete_file",
+    description: "Move um arquivo para lixeira do Google Drive",
+    inputSchema: {
+      type: "object",
+      properties: {
+        fileId: { type: "string", description: "ID do arquivo" },
+      },
+      required: ["fileId"],
+    },
+  },
+  {
+    name: "gdrive_export",
+    description: "Exporta um Google Doc em formato específico (PDF, DOCX, TXT)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        fileId: { type: "string", description: "ID do documento" },
+        format: {
+          type: "string",
+          enum: ["pdf", "docx", "txt", "html", "md"],
+          description: "Formato de exportação",
+          default: "pdf",
+        },
+        outputPath: { type: "string", description: "Caminho de saída (opcional)" },
+      },
+      required: ["fileId"],
+    },
+  },
 
-  // ── Drive ──
+  // Google Docs
+  {
+    name: "gdocs_create",
+    description: "Cria um novo documento Google Docs",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Título do documento" },
+        content: { type: "string", description: "Conteúdo inicial (opcional)" },
+      },
+      required: ["title"],
+    },
+  },
+  {
+    name: "gdocs_read",
+    description: "Lê conteúdo de um documento Google Docs",
+    inputSchema: {
+      type: "object",
+      properties: {
+        documentId: { type: "string", description: "ID do documento" },
+      },
+      required: ["documentId"],
+    },
+  },
+  {
+    name: "gdocs_update",
+    description: "Atualiza conteúdo de um documento Google Docs",
+    inputSchema: {
+      type: "object",
+      properties: {
+        documentId: { type: "string", description: "ID do documento" },
+        content: { type: "string", description: "Novo conteúdo" },
+        mode: {
+          type: "string",
+          enum: ["replace", "append"],
+          description: "Modo de atualização",
+          default: "replace",
+        },
+      },
+      required: ["documentId", "content"],
+    },
+  },
 
-  async driveListFiles(pageSize = 10, query = "") {
-    const params = {
-      pageSize,
-      fields: "files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink)",
-    };
-    if (query) params.q = query;
-    
-    const res = await this.drive.files.list(params);
-    return res.data.files || [];
-  }
+  // Google Sheets
+  {
+    name: "gsheets_create",
+    description: "Cria uma nova planilha Google Sheets",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Título da planilha" },
+      },
+      required: ["title"],
+    },
+  },
+  {
+    name: "gsheets_read",
+    description: "Lê dados de uma planilha Google Sheets",
+    inputSchema: {
+      type: "object",
+      properties: {
+        spreadsheetId: { type: "string", description: "ID da planilha" },
+        range: { type: "string", description: "Intervalo (ex: A1:D10)", default: "A:Z" },
+      },
+      required: ["spreadsheetId"],
+    },
+  },
+  {
+    name: "gsheets_write",
+    description: "Escreve dados em uma planilha Google Sheets",
+    inputSchema: {
+      type: "object",
+      properties: {
+        spreadsheetId: { type: "string", description: "ID da planilha" },
+        range: { type: "string", description: "Intervalo (ex: A1)" },
+        values: {
+          type: "array",
+          description: "Dados em formato [[row1col1, row1col2], ...]",
+          items: { type: "array" },
+        },
+      },
+      required: ["spreadsheetId", "range", "values"],
+    },
+  },
 
-  async driveReadFile(fileId) {
-    // Try to export Google Docs/Sheets as text
-    const file = await this.drive.files.get({
-      fileId,
-      fields: "id, name, mimeType",
-    });
+  // Gmail
+  {
+    name: "gmail_search",
+    description: "Busca e-mails no Gmail",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Query de busca (sintaxe Gmail)" },
+        maxResults: { type: "number", description: "Número máximo de resultados", default: 10 },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "gmail_read",
+    description: "Lê conteúdo de um e-mail específico",
+    inputSchema: {
+      type: "object",
+      properties: {
+        messageId: { type: "string", description: "ID da mensagem" },
+      },
+      required: ["messageId"],
+    },
+  },
+  {
+    name: "gmail_send",
+    description: "Envia um e-mail pelo Gmail",
+    inputSchema: {
+      type: "object",
+      properties: {
+        to: { type: "string", description: "Destinatário(s)" },
+        subject: { type: "string", description: "Assunto" },
+        body: { type: "string", description: "Corpo do e-mail" },
+        isHtml: { type: "boolean", description: " corpo em HTML?", default: false },
+      },
+      required: ["to", "subject", "body"],
+    },
+  },
+  {
+    name: "gmail_labels",
+    description: "Lista labels/etiquetas do Gmail",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+  },
+];
 
-    const mimeType = file.data.mimeType;
-    
-    if (mimeType === "application/vnd.google-apps.document") {
-      const res = await this.drive.files.export({
-        fileId,
-        mimeType: "text/plain",
+// ============================================================
+// Implementação das Tools
+// ============================================================
+
+async function executeTool(name, args) {
+  const auth = await getAuthenticatedClient();
+
+  switch (name) {
+    // --- Google Drive ---
+    case "gdrive_list_files": {
+      const drive = google.drive({ version: "v3", auth });
+      const res = await drive.files.list({
+        q: args.query || undefined,
+        pageSize: args.pageSize || 10,
+        pageToken: args.pageToken || undefined,
+        fields: "nextPageToken, files(id, name, mimeType, size, modifiedTime, webViewLink)",
+        orderBy: "modifiedTime desc",
       });
-      return { name: file.data.name, content: res.data, mimeType };
-    } else if (mimeType === "application/vnd.google-apps.spreadsheet") {
-      const res = await this.drive.files.export({
-        fileId,
-        mimeType: "text/csv",
+      return { files: res.data.files, nextPageToken: res.data.nextPageToken };
+    }
+
+    case "gdrive_search": {
+      const drive = google.drive({ version: "v3", auth });
+      let query = `name contains '${args.query}'`;
+      if (args.mimeType) {
+        query += ` and mimeType='${args.mimeType}'`;
+      }
+      const res = await drive.files.list({
+        q: query,
+        pageSize: args.pageSize || 10,
+        fields: "files(id, name, mimeType, size, modifiedTime)",
+        orderBy: "relevance",
       });
-      return { name: file.data.name, content: res.data, mimeType };
-    } else {
-      // Plain file download
-      const res = await this.drive.files.get(
-        { fileId, alt: "media" },
+      return { files: res.data.files };
+    }
+
+    case "gdrive_read_file": {
+      const drive = google.drive({ version: "v3", auth });
+      const mimeType = args.mimeType || "text/plain";
+      const res = await drive.files.export(
+        { fileId: args.fileId, mimeType },
         { responseType: "text" }
       );
-      return { name: file.data.name, content: res.data, mimeType };
+      return { content: res.data };
     }
-  }
 
-  async driveCreateFile(name, content = "", mimeType = "text/plain") {
-    const res = await this.drive.files.create({
-      requestBody: {
-        name,
-        mimeType,
-      },
-      media: {
-        mimeType,
-        body: content,
-      },
-      fields: "id, name, mimeType, webViewLink",
-    });
-    return res.data;
-  }
+    case "gdrive_create_file": {
+      const drive = google.drive({ version: "v3", auth });
+      const fileMetadata = { name: args.name };
+      if (args.folderId) fileMetadata.parents = [args.folderId];
 
-  async driveUploadFile(name, content, mimeType = "text/plain") {
-    return await this.driveCreateFile(name, content, mimeType);
-  }
+      const res = await drive.files.create({
+        resource: fileMetadata,
+        media: {
+          mimeType: args.mimeType || "text/plain",
+          body: args.content,
+        },
+        fields: "id, name, webViewLink",
+      });
+      return { file: res.data };
+    }
 
-  async driveDeleteFile(fileId) {
-    await this.drive.files.delete({ fileId });
-    return { deleted: true, fileId };
-  }
+    case "gdrive_upload_file": {
+      const drive = google.drive({ version: "v3", auth });
+      const { readFileSync } = await import("fs");
+      const fileContent = readFileSync(args.filePath);
 
-  async driveSearchFiles(query) {
-    return await this.driveListFiles(10, `name contains '${query.replace(/'/g, "\\'")}'`);
-  }
+      const fileMetadata = { name: args.name || args.filePath.split("/").pop() };
+      if (args.folderId) fileMetadata.parents = [args.folderId];
 
-  // ── Docs ──
+      const res = await drive.files.create({
+        resource: fileMetadata,
+        media: {
+          mimeType: args.mimeType || "application/octet-stream",
+          body: fileContent,
+        },
+        fields: "id, name, webViewLink",
+      });
+      return { file: res.data };
+    }
 
-  async docsCreate(title, content = "") {
-    // Create a blank document
-    const doc = await this.docs.documents.create({
-      requestBody: { title },
-    });
-    
-    if (content) {
-      // Insert content into the document
-      const documentId = doc.data.documentId;
-      await this.docs.documents.batchUpdate({
-        documentId,
-        requestBody: {
-          requests: [
-            {
-              insertText: {
-                location: { index: 1 },
-                text: content,
+    case "gdrive_delete_file": {
+      const drive = google.drive({ version: "v3", auth });
+      await drive.files.delete({ fileId: args.fileId });
+      return { success: true, message: "Arquivo movido para lixeira" };
+    }
+
+    case "gdrive_export": {
+      const drive = google.drive({ version: "v3", auth });
+      const mimeTypes = {
+        pdf: "application/pdf",
+        docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        txt: "text/plain",
+        html: "text/html",
+        md: "text/markdown",
+      };
+      const mimeType = mimeTypes[args.format] || "application/pdf";
+      const res = await drive.files.export(
+        { fileId: args.fileId, mimeType },
+        { responseType: "arraybuffer" }
+      );
+
+      const ext = args.format || "pdf";
+      const outputPath = args.outputPath || `export_${args.fileId}.${ext}`;
+      const { writeFileSync } = await import("fs");
+      writeFileSync(outputPath, Buffer.from(res.data));
+      return { success: true, path: outputPath, format: ext };
+    }
+
+    // --- Google Docs ---
+    case "gdocs_create": {
+      const docs = google.docs({ version: "v1", auth });
+      const res = await docs.documents.create({
+        requestBody: { title: args.title },
+      });
+
+      if (args.content) {
+        await docs.documents.batchUpdate({
+          documentId: res.data.documentId,
+          requestBody: {
+            requests: [
+              {
+                insertText: {
+                  location: { index: 1 },
+                  text: args.content,
+                },
               },
-            },
-          ],
+            ],
+          },
+        });
+      }
+
+      return {
+        documentId: res.data.documentId,
+        title: res.data.title,
+        url: `https://docs.google.com/document/d/${res.data.documentId}/edit`,
+      };
+    }
+
+    case "gdocs_read": {
+      const docs = google.docs({ version: "v1", auth });
+      const res = await docs.documents.get({ documentId: args.documentId });
+
+      let text = "";
+      for (const element of res.data.body.content || []) {
+        if (element.paragraph) {
+          for (const el of element.paragraph.elements || []) {
+            if (el.textRun) {
+              text += el.textRun.content;
+            }
+          }
+        }
+      }
+
+      return { title: res.data.title, content: text };
+    }
+
+    case "gdocs_update": {
+      const docs = google.docs({ version: "v1", auth });
+
+      if (args.mode === "append") {
+        const doc = await docs.documents.get({ documentId: args.documentId });
+        const endIndex = doc.data.body.content.slice(-1)[0]?.endIndex || 1;
+
+        await docs.documents.batchUpdate({
+          documentId: args.documentId,
+          requestBody: {
+            requests: [
+              {
+                insertText: {
+                  location: { index: endIndex - 1 },
+                  text: args.content,
+                },
+              },
+            ],
+          },
+        });
+      } else {
+        // Replace: limpa e insere
+        const doc = await docs.documents.get({ documentId: args.documentId });
+        const endIndex = doc.data.body.content.slice(-1)[0]?.endIndex || 1;
+
+        await docs.documents.batchUpdate({
+          documentId: args.documentId,
+          requestBody: {
+            requests: [
+              {
+                deleteContentRange: {
+                  range: { startIndex: 1, endIndex: endIndex - 1 },
+                },
+              },
+              {
+                insertText: {
+                  location: { index: 1 },
+                  text: args.content,
+                },
+              },
+            ],
+          },
+        });
+      }
+
+      return { success: true, documentId: args.documentId };
+    }
+
+    // --- Google Sheets ---
+    case "gsheets_create": {
+      const sheets = google.sheets({ version: "v4", auth });
+      const res = await sheets.spreadsheets.create({
+        requestBody: {
+          properties: { title: args.title },
         },
       });
-      return { documentId, title, webViewLink: `https://docs.google.com/document/d/${documentId}/edit` };
+      return {
+        spreadsheetId: res.data.spreadsheetId,
+        title: res.data.properties.title,
+        url: res.data.spreadsheetUrl,
+      };
     }
-    
-    return doc.data;
-  }
 
-  async docsRead(documentId) {
-    const doc = await this.docs.documents.get({ documentId });
-    const content = doc.data.body?.content
-      ?.map(block => block.paragraph?.elements
-        ?.map(el => el.textRun?.content || "")
-        .join("") || "")
-      .join("\n") || "";
-    
-    return {
-      documentId,
-      title: doc.data.title,
-      content,
-    };
-  }
-
-  async docsAppendText(documentId, text) {
-    const doc = await this.docs.documents.get({ documentId });
-    const endIndex = doc.data.body?.content?.slice(-1)?.[0]?.endIndex || 1;
-    
-    await this.docs.documents.batchUpdate({
-      documentId,
-      requestBody: {
-        requests: [
-          {
-            insertText: {
-              location: { index: endIndex - 1 },
-              text: "\n" + text,
-            },
-          },
-        ],
-      },
-    });
-    
-    return { documentId, appended: true };
-  }
-
-  // ── Sheets ──
-
-  async sheetsCreate(title, headers = []) {
-    const spreadsheet = await this.sheets.spreadsheets.create({
-      requestBody: { properties: { title } },
-    });
-    
-    if (headers.length > 0) {
-      await this.sheets.spreadsheets.values.update({
-        spreadsheetId: spreadsheet.data.spreadsheetId,
-        range: "A1",
-        valueInputOption: "RAW",
-        requestBody: { values: [headers] },
+    case "gsheets_read": {
+      const sheets = google.sheets({ version: "v4", auth });
+      const res = await sheets.spreadsheets.values.get({
+        spreadsheetId: args.spreadsheetId,
+        range: args.range || "A:Z",
       });
+      return { values: res.data.values || [] };
     }
-    
-    return {
-      spreadsheetId: spreadsheet.data.spreadsheetId,
-      title,
-      webViewLink: `https://docs.google.com/spreadsheets/d/${spreadsheet.data.spreadsheetId}/edit`,
-    };
-  }
 
-  async sheetsAppendRows(spreadsheetId, rows) {
-    await this.sheets.spreadsheets.values.append({
-      spreadsheetId,
-      range: "A1",
-      valueInputOption: "RAW",
-      insertDataOption: "INSERT_ROWS",
-      requestBody: { values: rows },
-    });
-    return { spreadsheetId, rowsAdded: rows.length };
-  }
+    case "gsheets_write": {
+      const sheets = google.sheets({ version: "v4", auth });
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: args.spreadsheetId,
+        range: args.range,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: args.values },
+      });
+      return { success: true };
+    }
 
-  async sheetsRead(spreadsheetId, range = "A1:Z1000") {
-    const res = await this.sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range,
-    });
-    return {
-      spreadsheetId,
-      values: res.data.values || [],
-    };
-  }
+    // --- Gmail ---
+    case "gmail_search": {
+      const gmail = google.gmail({ version: "v1", auth });
+      const res = await gmail.users.messages.list({
+        userId: "me",
+        q: args.query,
+        maxResults: args.maxResults || 10,
+      });
 
-  // ── Gmail ──
-
-  async gmailSearch(query = "", maxResults = 5) {
-    const res = await this.gmail.users.messages.list({
-      userId: "me",
-      q: query,
-      maxResults,
-    });
-    
-    const messages = res.data.messages || [];
-    
-    // Get details for each message
-    const details = await Promise.all(
-      messages.slice(0, 5).map(async (msg) => {
-        const detail = await this.gmail.users.messages.get({
+      const messages = [];
+      for (const msg of res.data.messages || []) {
+        const detail = await gmail.users.messages.get({
           userId: "me",
           id: msg.id,
           format: "metadata",
-          metadataHeaders: ["From", "To", "Subject", "Date"],
+          metadataHeaders: ["Subject", "From", "Date"],
         });
-        
         const headers = detail.data.payload?.headers || [];
-        const getHeader = (name) => headers.find(h => h.name === name)?.value || "";
-        
-        return {
+        messages.push({
           id: msg.id,
-          threadId: detail.data.threadId,
-          from: getHeader("From"),
-          to: getHeader("To"),
-          subject: getHeader("Subject"),
-          date: getHeader("Date"),
+          subject: headers.find((h) => h.name === "Subject")?.value || "",
+          from: headers.find((h) => h.name === "From")?.value || "",
+          date: headers.find((h) => h.name === "Date")?.value || "",
           snippet: detail.data.snippet,
-        };
-      })
-    );
-    
-    return details;
-  }
+        });
+      }
 
-  async gmailSend(to, subject, body) {
-    const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString("base64")}?=`;
-    const messageParts = [
-      `To: ${to}`,
-      `Subject: ${utf8Subject}`,
-      "MIME-Version: 1.0",
-      "Content-Type: text/plain; charset=utf-8",
-      "Content-Transfer-Encoding: base64",
-      "",
-      Buffer.from(body).toString("base64"),
-    ];
-    const message = messageParts.join("\n");
+      return { messages, total: res.data.resultSizeEstimate };
+    }
 
-    const res = await this.gmail.users.messages.send({
-      userId: "me",
-      requestBody: {
-        raw: Buffer.from(message).toString("base64url"),
-      },
-    });
-    
-    return { id: res.data.id, threadId: res.data.threadId };
-  }
+    case "gmail_read": {
+      const gmail = google.gmail({ version: "v1", auth });
+      const res = await gmail.users.messages.get({
+        userId: "me",
+        id: args.messageId,
+        format: "full",
+      });
 
-  async gmailGetThread(threadId) {
-    const res = await this.gmail.users.threads.get({
-      userId: "me",
-      id: threadId,
-      format: "full",
-    });
-    
-    return res.data.messages?.map(msg => ({
-      id: msg.id,
-      from: msg.payload?.headers?.find(h => h.name === "From")?.value || "",
-      subject: msg.payload?.headers?.find(h => h.name === "Subject")?.value || "",
-      date: msg.payload?.headers?.find(h => h.name === "Date")?.value || "",
-      snippet: msg.snippet,
-    })) || [];
+      const headers = res.data.payload?.headers || [];
+      const subject = headers.find((h) => h.name === "Subject")?.value || "";
+      const from = headers.find((h) => h.name === "From")?.value || "";
+      const date = headers.find((h) => h.name === "Date")?.value || "";
+
+      let body = "";
+      if (res.data.payload?.body?.data) {
+        body = Buffer.from(res.data.payload.body.data, "base64").toString("utf-8");
+      } else if (res.data.payload?.parts) {
+        for (const part of res.data.payload.parts) {
+          if (part.mimeType === "text/plain" && part.body?.data) {
+            body = Buffer.from(part.body.data, "base64").toString("utf-8");
+            break;
+          }
+        }
+      }
+
+      return { subject, from, date, body, labels: res.data.labelIds };
+    }
+
+    case "gmail_send": {
+      const gmail = google.gmail({ version: "v1", auth });
+
+      const mimeMessage = [
+        `To: ${args.to}`,
+        `Subject: ${args.subject}`,
+        `Content-Type: ${args.isHtml ? "text/html" : "text/plain"}; charset=utf-8`,
+        "",
+        args.body,
+      ].join("\r\n");
+
+      const encodedMessage = Buffer.from(mimeMessage)
+        .toString("base64")
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+
+      const res = await gmail.users.messages.send({
+        userId: "me",
+        requestBody: { raw: encodedMessage },
+      });
+
+      return { success: true, messageId: res.data.id };
+    }
+
+    case "gmail_labels": {
+      const gmail = google.gmail({ version: "v1", auth });
+      const res = await gmail.users.labels.list({ userId: "me" });
+      return { labels: res.data.labels.map((l) => ({ id: l.id, name: l.name })) };
+    }
+
+    default:
+      throw new Error(`Tool desconhecida: ${name}`);
   }
 }
 
-// ─── MCP Server ───────────────────────────────────────────────────────
+// ============================================================
+// Servidor MCP
+// ============================================================
 
-const server = new Server(
+const server = createServer(
   {
-    name: "nexus-google-workspace",
+    name: "google-workspace-mcp",
     version: "1.0.0",
   },
   {
@@ -465,364 +677,47 @@ const server = new Server(
   }
 );
 
-let gws = null;
-
-// List available tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: [
-      // ── Drive Tools ──
-      {
-        name: "drive_list",
-        description: "List files in Google Drive. Optional: filter by query string.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            pageSize: { type: "number", default: 10, description: "Number of files to return" },
-            query: { type: "string", description: "Optional search query (e.g., 'name contains report')" },
-          },
-        },
-      },
-      {
-        name: "drive_read",
-        description: "Read the content of a file from Google Drive by ID.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            fileId: { type: "string", description: "The ID of the file to read" },
-          },
-          required: ["fileId"],
-        },
-      },
-      {
-        name: "drive_create",
-        description: "Create a new file in Google Drive.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            name: { type: "string", description: "File name" },
-            content: { type: "string", default: "", description: "File content" },
-            mimeType: { type: "string", default: "text/plain", description: "MIME type" },
-          },
-          required: ["name"],
-        },
-      },
-      {
-        name: "drive_upload",
-        description: "Upload content to Google Drive as a new file.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            name: { type: "string", description: "File name" },
-            content: { type: "string", description: "File content" },
-            mimeType: { type: "string", default: "text/plain", description: "MIME type" },
-          },
-          required: ["name", "content"],
-        },
-      },
-      {
-        name: "drive_search",
-        description: "Search files in Google Drive by name.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            query: { type: "string", description: "Search query" },
-          },
-          required: ["query"],
-        },
-      },
-      {
-        name: "drive_delete",
-        description: "Delete a file from Google Drive.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            fileId: { type: "string", description: "File ID to delete" },
-            confirm: { type: "boolean", description: "Confirmation required" },
-          },
-          required: ["fileId", "confirm"],
-        },
-      },
-      // ── Docs Tools ──
-      {
-        name: "docs_create",
-        description: "Create a new Google Doc with optional content.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            title: { type: "string", description: "Document title" },
-            content: { type: "string", default: "", description: "Initial content" },
-          },
-          required: ["title"],
-        },
-      },
-      {
-        name: "docs_read",
-        description: "Read the content of a Google Doc by ID.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            documentId: { type: "string", description: "Google Doc ID" },
-          },
-          required: ["documentId"],
-        },
-      },
-      {
-        name: "docs_append",
-        description: "Append text to an existing Google Doc.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            documentId: { type: "string", description: "Google Doc ID" },
-            text: { type: "string", description: "Text to append" },
-          },
-          required: ["documentId", "text"],
-        },
-      },
-      // ── Sheets Tools ──
-      {
-        name: "sheets_create",
-        description: "Create a new Google Sheet with optional headers.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            title: { type: "string", description: "Sheet title" },
-            headers: {
-              type: "array",
-              items: { type: "string" },
-              description: "Optional column headers",
-            },
-          },
-          required: ["title"],
-        },
-      },
-      {
-        name: "sheets_append",
-        description: "Append rows to a Google Sheet.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            spreadsheetId: { type: "string", description: "Sheet ID" },
-            rows: {
-              type: "array",
-              items: {
-                type: "array",
-                items: { type: "string" },
-              },
-              description: "Rows of data to append",
-            },
-          },
-          required: ["spreadsheetId", "rows"],
-        },
-      },
-      {
-        name: "sheets_read",
-        description: "Read data from a Google Sheet.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            spreadsheetId: { type: "string", description: "Sheet ID" },
-            range: { type: "string", default: "A1:Z1000", description: "Range to read" },
-          },
-          required: ["spreadsheetId"],
-        },
-      },
-      // ── Gmail Tools ──
-      {
-        name: "gmail_search",
-        description: "Search Gmail messages.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            query: { type: "string", default: "", description: "Gmail search query" },
-            maxResults: { type: "number", default: 5, description: "Max results" },
-          },
-        },
-      },
-      {
-        name: "gmail_send",
-        description: "Send an email via Gmail.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            to: { type: "string", description: "Recipient email" },
-            subject: { type: "string", description: "Email subject" },
-            body: { type: "string", description: "Email body" },
-          },
-          required: ["to", "subject", "body"],
-        },
-      },
-      {
-        name: "gmail_get_thread",
-        description: "Get all messages in a Gmail thread.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            threadId: { type: "string", description: "Gmail thread ID" },
-          },
-          required: ["threadId"],
-        },
-      },
-    ],
-  };
+  return { tools: TOOLS };
 });
 
-// Handle tool calls
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
-  if (!gws) {
-    throw new Error("Google Workspace not authenticated. Restart the server to authenticate.");
-  }
-
   try {
-    let result;
-
-    switch (name) {
-      // ── Drive ──
-      case "drive_list": {
-        const files = await gws.driveListFiles(args?.pageSize || 10, args?.query || "");
-        result = { files };
-        break;
-      }
-      case "drive_read": {
-        result = await gws.driveReadFile(args.fileId);
-        break;
-      }
-      case "drive_create": {
-        result = await gws.driveCreateFile(args.name, args.content || "", args.mimeType || "text/plain");
-        break;
-      }
-      case "drive_upload": {
-        result = await gws.driveUploadFile(args.name, args.content, args.mimeType || "text/plain");
-        break;
-      }
-      case "drive_search": {
-        const files = await gws.driveSearchFiles(args.query);
-        result = { files };
-        break;
-      }
-      case "drive_delete": {
-        if (!args.confirm) {
-          throw new Error("Confirmation required. Set confirm: true to delete.");
-        }
-        result = await gws.driveDeleteFile(args.fileId);
-        break;
-      }
-      // ── Docs ──
-      case "docs_create": {
-        result = await gws.docsCreate(args.title, args.content || "");
-        break;
-      }
-      case "docs_read": {
-        result = await gws.docsRead(args.documentId);
-        break;
-      }
-      case "docs_append": {
-        result = await gws.docsAppendText(args.documentId, args.text);
-        break;
-      }
-      // ── Sheets ──
-      case "sheets_create": {
-        result = await gws.sheetsCreate(args.title, args.headers || []);
-        break;
-      }
-      case "sheets_append": {
-        result = await gws.sheetsAppendRows(args.spreadsheetId, args.rows);
-        break;
-      }
-      case "sheets_read": {
-        result = await gws.sheetsRead(args.spreadsheetId, args.range);
-        break;
-      }
-      // ── Gmail ──
-      case "gmail_search": {
-        result = await gws.gmailSearch(args?.query || "", args?.maxResults || 5);
-        break;
-      }
-      case "gmail_send": {
-        result = await gws.gmailSend(args.to, args.subject, args.body);
-        break;
-      }
-      case "gmail_get_thread": {
-        result = await gws.gmailGetThread(args.threadId);
-        break;
-      }
-      default:
-        throw new Error(`Unknown tool: ${name}`);
-    }
-
+    const result = await executeTool(name, args || {});
     return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
     };
   } catch (error) {
     return {
-      content: [{ type: "text", text: `Error: ${error.message}` }],
+      content: [
+        {
+          type: "text",
+          text: `Erro: ${error.message}`,
+        },
+      ],
       isError: true,
     };
   }
 });
 
-// ─── Main ─────────────────────────────────────────────────────────────
+// ============================================================
+// Iniciar servidor
+// ============================================================
 
 async function main() {
-  console.error("[nexus-google] Starting Google Workspace MCP Server...");
-  console.error(`[nexus-google] Config dir: ${CONFIG_DIR}`);
-
-  // Ensure config dir exists
-  if (!existsSync(CONFIG_DIR)) {
-    mkdirSync(CONFIG_DIR, { recursive: true });
-  }
-
-  // Check for credentials file
-  if (!existsSync(CREDENTIALS_PATH)) {
-    // Write credentials from env vars or create placeholder
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    
-    if (clientId && clientSecret) {
-      const credentials = {
-        installed: {
-          client_id: clientId,
-          client_secret: clientSecret,
-          redirect_uris: ["http://localhost:8080"],
-          auth_uri: "https://accounts.google.com/o/oauth2/auth",
-          token_uri: "https://oauth2.googleapis.com/token",
-        },
-      };
-      writeFileSync(CREDENTIALS_PATH, JSON.stringify(credentials, null, 2));
-      console.error("[nexus-google] Credentials saved from environment variables");
-    } else {
-      console.error(`[nexus-google] No credentials found. Create ${CREDENTIALS_PATH} or set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET env vars.`);
-      console.error("[nexus-google] Example credentials.json format:");
-      console.error(JSON.stringify({
-        installed: {
-          client_id: "YOUR_CLIENT_ID",
-          client_secret: "YOUR_CLIENT_SECRET",
-          redirect_uris: ["http://localhost:8080"],
-          auth_uri: "https://accounts.google.com/o/oauth2/auth",
-          token_uri: "https://oauth2.googleapis.com/token",
-        },
-      }, null, 2));
-      process.exit(1);
-    }
-  }
-
-  // Authenticate
-  const credentials = loadCredentials();
-  const auth = await authenticate(credentials);
-  gws = new GoogleWorkspaceAPI(auth);
-
-  console.error("[nexus-google] Authentication successful!");
-  console.error(`[nexus-google] Available tools: drive_list, drive_read, drive_create, drive_upload, drive_search, drive_delete, docs_create, docs_read, docs_append, sheets_create, sheets_append, sheets_read, gmail_search, gmail_send, gmail_get_thread`);
-
-  // Start MCP server
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("[nexus-google] MCP server connected and ready");
+  console.error("Google Workspace MCP Server rodando via stdio");
 }
 
 main().catch((error) => {
-  console.error("[nexus-google] Fatal error:", error);
+  console.error("Fatal error:", error);
   process.exit(1);
 });

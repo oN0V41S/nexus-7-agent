@@ -16,6 +16,18 @@ from src.job_apply_agent.deduplicator import append_applied
 
 logger = logging.getLogger(__name__)
 
+# Notion integration
+try:
+    import requests
+    NOTION_AVAILABLE = True
+except ImportError:
+    NOTION_AVAILABLE = False
+    logger.warning("requests library not available, Notion integration disabled")
+
+# Notion configuration
+NOTION_DATABASE_ID = "3893da06f613801089af000c1fd7e1c1"
+NOTION_KB_PAGE_ID = "3893da06f61380e18013cc35db16fa2c"
+
 # Status válidos
 VALID_STATUSES = {
     "applied", "reviewing", "interview", "offer", "rejected",
@@ -112,6 +124,83 @@ def _rewrite_applied_log(apps: list[dict]) -> None:
     with open(APPLIED_LOG, "w") as f:
         for app in apps:
             f.write(json.dumps(app, ensure_ascii=False) + "\n")
+
+
+def save_to_notion(app_data: dict, notion_token: str, database_id: str) -> bool:
+    """
+    Salva uma candidatura no Notion.
+
+    Args:
+        app_data: Dados da candidatura a serem salvos
+        notion_token: Token de acesso do Notion
+        database_id: ID do banco de dados do Notion
+
+    Returns:
+        True se salvo com sucesso, False caso contrário
+    """
+    if not NOTION_AVAILABLE:
+        logger.warning("Notion integration not available (requests library missing)")
+        return False
+
+    try:
+        # Preparar propriedades para o Notion
+        properties = {
+            "Nome da Vaga": {
+                "title": [{"text": {"content": app_data.get("title", "")}}]
+            },
+            "Empresa": {
+                "rich_text": [{"text": {"content": app_data.get("company", "")}}]
+            },
+            "Nível": {
+                "select": {"name": app_data.get("level", "")}
+            },
+            "Área": {
+                "select": {"name": app_data.get("area", "")}
+            },
+            "Plataforma": {
+                "rich_text": [{"text": {"content": app_data.get("platform", "")}}]
+            },
+            "Link": {
+                "url": app_data.get("url", "")
+            },
+            "Data": {
+                "date": {"start": app_data.get("date", "")}
+            },
+            "Score": {
+                "number": app_data.get("score", 0)
+            },
+            "Status": {
+                "select": {"name": app_data.get("status", "")}
+            },
+        }
+
+        # Remover propriedades vazias
+        properties = {k: v for k, v in properties.items() if v}
+
+        # Enviar para Notion
+        response = requests.post(
+            "https://api.notion.com/v1/pages",
+            headers={
+                "Authorization": f"Bearer {notion_token}",
+                "Content-Type": "application/json",
+                "Notion-Version": "2022-06-28",
+            },
+            json={
+                "parent": {"database_id": database_id},
+                "properties": properties,
+            },
+        )
+
+        if response.status_code == 200:
+            logger.info(f"Candidatura salva no Notion: {app_data.get('title', '')}")
+            return True
+        else:
+            logger.error(f"Erro ao salvar no Notion: {response.status_code} - {response.text}")
+            return False
+
+    except Exception as e:
+        logger.error(f"Exceção ao salvar no Notion: {str(e)}")
+        return False
 
 
 # ─── Exportação ──────────────────────────────────────────────────────────────

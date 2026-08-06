@@ -187,11 +187,21 @@ def cmd_adapt(args: list[str]) -> None:
         print(f"❌ Vaga {job_id} não encontrada.")
         return
 
+    # Verifica match score - se match > 70%, prossegue; senão, mostra match e pára
+    match_score = job.get("score", 0)
+    if match_score <= 70:
+        print(f"📊 Match score: {match_score}% para {job.get('title', job_id)}")
+        print(f"⚠️  Match abaixo do limiar (70%). Não gerando materiais adaptados.")
+        print(f"💡 Considere candidatar-se a vagas com maior compatibilidade.")
+        return
+
+    print(f"📊 Match score: {match_score}% para {job.get('title', job_id)}")
+    print(f"📝 Gerando materiais para {job.get('title', job_id)}...")
+
     # Salva em data/job-apply-agent/<vaga_id>/ (regra v1.2.0+)
     output_dir = PROJECT_DATA_DIR / job_id
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"📝 Gerando materiais para {job.get('title', job_id)}...")
     result = generate_application(profile, job, output_dir)
 
     print(f"✅ Currículo adaptado (DOCX): {result.get('resume_path')}")

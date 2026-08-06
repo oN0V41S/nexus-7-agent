@@ -13,10 +13,8 @@ opensre:
 
   providers:
     llm:
-      - name: openai
-        model: gpt-4o
-      - name: anthropic
-        model: claude-sonnet-4-20250514
+      - name: gemini
+        model: gemini-2.5-flash
 
   alerts:
     templates_dir: .opencode/opensre/alerts

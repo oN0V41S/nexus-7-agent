@@ -19,3 +19,23 @@ $ARGUMENTS
 
 Use `question` se informações essenciais estiverem faltando (escopo, prazo, preferências técnicas).
 Apresente o plano ao usuário e aguarde aprovação antes de executar.
+
+---
+
+## Após Aprovação do Plano
+
+Quando o plano for aprovado, informe ao usuário:
+
+> **Plano aprovado!** Para executar etapa por etapa com acompanhamento visual, use:
+> ```
+> /plan-execute [caminho-do-plano]
+> ```
+> 
+> Este comando **não edita arquivos de código** — apenas:
+> - Apresenta a tarefa atual do pipeline
+> - Explica resumidamente o que fazer
+> - Pergunta se deseja prosseguir/pular/voltar
+> - Atualiza o checklist no plano com progresso ✅/⏳/⏸️
+> - Salva handoff para retomada posterior
+
+O template de plano está em `.opencode/skills/harness-workflow/templates/feature-plan-template.md`

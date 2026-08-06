@@ -1,0 +1,16 @@
+[
+  {
+    "key": "test-entry-1",
+    "value": "{\"data\": \"test1\"}",
+    "scope": "session",
+    "agent": "test-agent",
+    "sessionID": "session-001"
+  },
+  {
+    "key": "test-entry-2",
+    "value": "{\"data\": \"test2\"}",
+    "scope": "project",
+    "agent": "test-agent",
+    "sessionID": "session-002"
+  }
+]

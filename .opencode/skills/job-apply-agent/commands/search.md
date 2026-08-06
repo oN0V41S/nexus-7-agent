@@ -30,3 +30,11 @@ cd /workspaces/nexus-7-agent && python3 run_job_agent.py search [termo] [localiz
 ## Output esperado
 Lista consolidada de vagas com título, empresa, local, descrição, URL e plataforma de origem.
 Salvo em `~/.job-apply-agent/search_results.json`.
+
+## Controle de Rate Limiting
+O sistema implementa rate limiting automático:
+- **LinkedIn (Chrome MCP)**: 5 requisições/min
+- **Glassdoor/Indeed/Monster (Playwright MCP)**: 10 requisições/min
+- **Total combinado**: 15 requisições/min
+
+Se o limite for atingido, o sistema pausa automaticamente e tenta novamente após 60 segundos.
